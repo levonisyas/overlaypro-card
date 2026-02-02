@@ -1,0 +1,6 @@
+{
+  "name": "Overlay Pro Card",
+  "content_in_root": false,
+  "filename": "overlaypro-card.js",
+  "render_mode": "ts"
+}

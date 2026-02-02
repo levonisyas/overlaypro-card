@@ -1,0 +1,349 @@
+# Overlay Pro Card Card for Home Assistant
+
+<img src="https://raw.githubusercontent.com/levonisyas/overlaypro-card/main/demo/demo.jpg" width="1200" alt="Overlay Pro Card">
+
+
+Overlay Pro Card is an evolution of the Picture Elements concept:
+
+- Instead of placing icons or images on top of a dashboard…
+- It places **real Lovelace cards** as floating popup overlays
+- Using a portal-mode UI layer system (menu + embedded popups)
+
+This card is designed as the overlay engine for future **Dashboard3D** ecosystem.
+
+---
+
+## ⭐ What is Overlay Pro Card?
+
+Overlay Pro Card provides:
+
+- A floating popup card system
+- A portal-mode overlay layer (does not break clicks behind it)
+- A built-in menu button launcher
+- Manual embed targeting with simple IDs (`001–999`)
+- Multi-popup dashboards with full positioning control
+
+---
+
+## Features
+
+- ✅ Embed any Lovelace card dynamically
+- ✅ Embed cards from any dashboard to any dashboard
+- ✅ Works across dashboards/views
+- ✅ Floating popup overlays with fixed positioning
+- ✅ Built-in menu button launcher
+- ✅ Manual ID targeting system (001–999)
+- ✅ Scroll support for long cards
+- ✅ Hidden overlays do not block clicks behind them
+- ✅ Floor3D / Dashboard3D ready
+
+---
+
+## Installation
+
+### HACS (Recommended)
+
+1. Open HACS
+2. Go to Frontend
+3. Add this repository as a custom repo:
+
+   `https://github.com/levonisyas/overlaypro-card`
+
+4. Install **Overlay Pro Card**
+5. Restart Home Assistant
+
+---
+
+### Manual Install
+
+1. Download:
+
+   `overlaypro-card.js`
+
+2. Copy into:
+
+   `/config/www/community/overlaypro-card/`
+
+3. Add as Lovelace resource:
+
+```yaml
+resources:
+  - url: /local/community/overlaypro-card/overlaypro-card.js
+    type: module
+```
+
+---
+
+## Core Concept
+
+Overlay Pro Card works in 2 steps:
+
+---
+
+## Step 1 — Define a SOURCE Card
+
+Any Lovelace card becomes embeddable by adding:
+
+```yaml
+icon: EMBED#001
+```
+
+### Universal SOURCE Card Template (Global)
+
+This can be **any Lovelace card type**:
+
+```yaml
+type: <YOUR_CARD_TYPE>           # Example: entities, thermostat, grid, custom:...
+icon: EMBED#001                  # REQUIRED: Add this line *IMPORTANT* Embed source ID (001–999)
+title: <YOUR_CARD_NAME>          # Example: Living Room Controls
+entities:
+  - <YOUR_ENTITY_1>              # Example: light.living_room
+```
+
+The only required rule is:
+
+```yaml
+icon: EMBED#001
+```
+
+---
+
+## Step 2 — Open it as an Overlay Popup
+
+Overlay Pro Card locates the source card and displays it as a floating popup.
+Overlay Pro Card will search the dashboard and embed it dynamically.
+
+---
+
+### ⭐ NEW STANDARD  — Single Card Engine  
+
+Instead of creating multiple embedder cards,
+you now define everything inside one Overlay Pro Card card:
+
+Menu buttons
+
+Popup definitions (embedders[])
+
+Positioning per popup
+
+---
+
+## Full YAML Configuration (Menu + Popups)
+
+```yaml
+type: custom:overlaypro-card
+
+# ----------------------------
+# MENU SETTINGS (OPTIONAL)
+# ----------------------------
+menu:
+  enabled: true                # OPTIONAL: Enable menu buttons (default: false)
+
+  position:                    # OPTIONAL: Menu CSS style
+    mode: fixed                # OPTIONAL: fixed | absolute (default: fixed)
+    bottom: 15%                # OPTIONAL: Vertical position (use either top OR bottom). Accepts CSS values: %, px, vh, rem...
+    right: 10%                 # OPTIONAL: Horizontal position (use either left OR right). Accepts CSS values: %, px, vw, rem...
+    z_index: 1100              # OPTIONAL: Menu layer priority (default: 1100)
+
+  button_style: |              # OPTIONAL: Static button CSS style
+    background: black;
+    color: white;
+
+  buttons:
+    - label: Lights            # OPTIONAL: Button label
+      icon: mdi:lightbulb      # OPTIONAL: Button icon
+      target: "001"            # REQUIRED: Must match embed_id below *IMPORTANT*
+
+    - label: Climate
+      icon: mdi:thermostat
+      target: "002"
+
+# ----------------------------
+# EMBEDDER POPUPS (REQUIRED)
+# ----------------------------
+embedders:
+  - embed_id: "001"          # REQUIRED: 3-digit ID (001-999) *IMPORTANT*
+    dashboard: lovelace      # REQUIRED: Source dashboard name/path *IMPORTANT*
+    show_title: false        # OPTIONAL: Hide source card title (default: true)
+    enable_scroll: true      # OPTIONAL: Enable scrolling for long content (default: true)
+    card_size: 2             # OPTIONAL: Card height scale 1-10 (default: 1)
+    show_close: true         # OPTIONAL: Show close (X) button in header (default: false)
+    embedder_title: ""       # OPTIONAL: Custom popup title string (default: empty)
+    default_visible: true    # OPTIONAL: Initial visibility on load (default: false)
+
+    content:
+      position:              # OPTIONAL: Popup CSS style
+        mode: fixed          # OPTIONAL: fixed | absolute (default: fixed)
+        top: 15%             # OPTIONAL: Vertical position (use either top OR bottom). Accepts CSS values: %, px, vh, rem...
+        right: 5%            # OPTIONAL: Horizontal position (use either left OR right). Accepts CSS values: %, px, vw, rem...
+        width: 380px         # OPTIONAL: Popup width
+        height: 300px        # OPTIONAL: Popup height
+        z_index: 1000        # OPTIONAL: Popup layer priority (default: 1000)
+
+  - embed_id: "002"
+    dashboard: lovelace
+    show_title: true
+    enable_scroll: true
+    show_close: true
+    embedder_title: "Climate"
+    default_visible: false
+
+    content:
+      position:
+        mode: fixed
+        top: 15%
+        right: 45%
+        width: 380px
+        height: 300px
+        z_index: 1000
+```
+
+---
+
+**Visual Editor Notes**
+
+Overlay Pro Card uses `icon: EMBED#001` as the embed marker
+because other custom fields often break the Visual Editor.
+
+**CSS Position Units**
+```
+Position accepts any valid CSS unit:
+- %, e.g., top: 15%
+- px, e.g., right: 120px
+- vh/vw, rem, em, etc.
+Use *either* top OR bottom and *either* left OR right to avoid conflicts.
+```
+
+**Z-Index Guide**
+```
+## Z-Index Notes
+You can override menu and popup z_index to control stacking.
+Menu default: 1100
+Popup default: 1000
+```
+
+**Overlay Trigger API**
+```js
+window.dispatchEvent(new CustomEvent('overlaypro-card-open', {
+  detail: { target: '001' }
+}));
+```
+```
+## JS API (Optional)
+Overlay Pro Card listens for:
+- overlaypro-card-open { target: "001" }
+- overlaypro-card-close { target: "001" }
+```
+
+---
+
+## Manual Matching Rule
+
+Buttons always open the popup with the same ID:
+
+```yaml
+target: "001"
+embed_id: "001"
+```
+
+Overlay Pro Card does not auto-match.
+Manual control is intentional for stability.
+It only shows status + logs if missing.
+
+---
+
+## Important Notes
+
+- Source cards MUST include:
+
+  `icon: EMBED#001`
+
+- Dashboard names are case-sensitive
+- Maximum supported IDs:
+
+  `001 → 999`
+
+- Hidden overlays use:
+
+  `display: none`
+
+So they do not block clicks behind them.
+
+---
+
+## 🌍Project Vision
+
+Overlay Pro Card is part of a future 3-module ecosystem:
+
+1. Floor3D Pro → 3D Scene Engine  
+2. Overlay Pro Card → UI Overlay Engine  
+3. Dashboard3D → Full Interactive 3D Dashboard Platform
+
+---
+
+## Support
+
+Found a bug or want a feature?
+
+Open an issue on GitHub:
+
+https://github.com/levonisyas/overlaypro-card
+
+## 🚨 ERROR CONDITIONS:
+No embed_id: "Overlay Pro Card requires both embed_id AND dashboard parameters"
+Dashboard not found: "Dashboard 'dashboard_name' not found or inaccessible"
+Card not found: "Card with embed ID #XXX not found in dashboard 'dashboard_name'"
+Invalid embed_id format: "embed_id must be a 3-digit number (001-999)"
+
+
+## ✅ SUCCESS MESSAGE (console):
+"Overlay Pro Card successfully embedded card #XXX"
+"Dashboard: dashboard_name"
+"Scroll enabled: true/false"
+
+## 🛠 TROUBLESHOOTING:
+Add icon to source card: icon: 'EMBED#001'
+Correctly write dashboard name
+Make embed_id unique (001-999)
+Ctrl+F5 + Home Assistant restart
+- “Card not found” → check dashboard name (case sensitive)
+- “Overlay behind sidebar” → increase z_index
+- “Position not applying” → ensure only one of top/bottom and one of left/right are defined
+
+## ❌ "Card not found" error
+1. Verify source card has `icon: EMBED#001` (exact format)
+2. Check dashboard name spelling (case-sensitive)
+3. Ensure embed ID is unique (001-999)
+
+## ❌ "Dashboard not found" error  
+1. Verify dashboard exists and is accessible
+2. Check URL path if using custom dashboard names
+3. Try with `dashboard: lovelace` for main dashboard
+
+## ❌ Visual Editor shows "Unsupported"
+This is normal! Overlay Pro Card uses standard `icon:` property which Visual Editor fully supports. You can still edit the source card normally.
+
+## Stack Compatibility
+Works with vertical-stack, horizontal-stack, and grid layouts. Embed ID can be placed in any card within a stack.
+
+## ⚠️ Limitations & Notes
+
+- Maximum 999 unique embed IDs per installation (001-999)
+- Source card must be in same Home Assistant instance
+- Dashboard names are case-sensitive
+- Works with all standard and most custom cards
+- Not compatible with cards that dynamically change their `icon:` property
+
+## 🤝 Contributing & Support
+
+Found a bug or have a feature request? Please open an issue on GitHub.
+
+## Development Notes
+This project was developed with a focus on:
+- Visual Editor compatibility
+- Simple, intuitive configuration
+- Maximum compatibility with existing setups
+- Performance optimization through AI-assisted algorithms
+  
+*"From blueprints to code - building better solutions for smart homes."*
+
