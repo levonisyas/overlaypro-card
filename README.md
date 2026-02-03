@@ -1,4 +1,4 @@
-# Overlay Pro Card Card for Home Assistant
+# Overlay Pro Card — Engine Powering Overlay Popup UI Layers
 
 <img src="https://raw.githubusercontent.com/levonisyas/overlaypro-card/main/demo/demo.jpg" width="1200" alt="Overlay Pro Card">
 
