@@ -132,7 +132,8 @@ Positioning per popup
 
 ```yaml
 type: custom:overlaypro-card
-
+portal_mode: global/local           # OPTIONAL: global MODE Mounts UI layers into document.body. // local MODE Mounts overlay layers inside the card itself
+overlay_log: true / false
 # ----------------------------
 # MENU SETTINGS (OPTIONAL)
 # ----------------------------
@@ -197,6 +198,52 @@ embedders:
         height: 300px
         z_index: 1000
 ```
+
+---
+
+### Portal Mode Support (Global vs Local)
+
+Overlay Pro supports two mounting behaviors:
+
+#### `portal_mode: global` (Default)
+
+For most dashboards:
+Mounts UI layers into `document.body`.
+
+* Best for true fullscreen overlays
+* Works like a system-wide popup engine
+
+```yaml
+portal_mode: global
+```
+
+#### `portal_mode: local` (Closed System Mode)
+
+For embedded environments (Scene dashboards):
+Mounts overlay layers inside the card itself.
+
+* Prevents cross-view overlay persistence
+* Useful for Scene3D integration or container dashboards
+
+```yaml
+portal_mode: local
+```
+
+---
+
+### Improved Cleanup on View Change
+
+When leaving a dashboard view, Overlay Pro now properly tears down:
+
+* Hash listeners
+* Menu layer roots
+* Popup content layers
+
+This prevents:
+
+* Ghost menus staying visible
+* Home Assistant sidebar becoming unclickable
+* UI leftovers after navigation
 
 ---
 

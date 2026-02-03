@@ -353,7 +353,26 @@ class overlayprocard extends HTMLElement {
       // global (default) => document.body
       // local            => this (card container)
       const mode = (this._config && this._config.portal_mode) ? this._config.portal_mode : 'global';
+
+      // CLOSED SYSTEM:
+      // local  => mount inside this card (true local viewport)
+      // global => mount to document.body (legacy)
       const mountTarget = (mode === 'local') ? this : document.body;
+      // =========================================================================
+      // DEBUG: Portal mount mode log (ALWAYS visible, once)
+      // =========================================================================
+      if (!this._portalModeLogged) {
+        this._portalModeLogged = true;
+
+        const targetName =
+          (mountTarget === document.body)
+            ? 'document.body'
+            : (mountTarget.tagName ? mountTarget.tagName.toLowerCase() : 'local-container');
+
+        console.info(
+          `pro.[OVERLAY] portal_mode:"${mode}" mounted to → ${targetName}`
+        );
+      }
 
       if (!this._portalRoot) {
         this._portalRoot = document.createElement('div');
@@ -367,6 +386,13 @@ class overlayprocard extends HTMLElement {
         this._menuRoot = document.createElement('div');
         this._menuRoot.className = 'overlaypro-card-menu-root';
         this._menuRoot.style.pointerEvents = 'auto';
+
+        // LOCAL: roots overlay inside this card viewport
+        if (mode === 'local') {
+          this._menuRoot.style.position = 'absolute';
+          this._menuRoot.style.inset = '0';
+        }
+
         mountTarget.appendChild(this._menuRoot);
       }
       this._applyMenuPositioning();
@@ -375,6 +401,13 @@ class overlayprocard extends HTMLElement {
         this._contentRoot = document.createElement('div');
         this._contentRoot.className = 'overlaypro-card-content-root';
         this._contentRoot.style.pointerEvents = 'auto';
+
+        // LOCAL: roots overlay inside this card viewport
+        if (mode === 'local') {
+          this._contentRoot.style.position = 'absolute';
+          this._contentRoot.style.inset = '0';
+        }
+
         mountTarget.appendChild(this._contentRoot);
       }
       // IMPORTANT: In embedders[] mode, do NOT override active popup positioning.
@@ -584,16 +617,29 @@ class overlayprocard extends HTMLElement {
     // Main Loading Function - optimized performance
     // --------------------------------------------------------------------------
     async _loadCard() {
-      // Clean host setup (IMPORTANT: host click-through, only layers are interactive)
+      // Clean host setup
+      // SETTING: PORTAL_MODE (local = closed system viewport, global = click-through)
+      const mode = (this._config && this._config.portal_mode) ? this._config.portal_mode : 'global';
+
       this.style.display = 'block';
       this.style.position = 'relative';
-      this.style.width = '0';
-      this.style.height = '0';
-      this.style.minHeight = '0';
       this.style.padding = '0';
       this.style.margin = '0';
       this.style.borderRadius = '0';
-      this.style.pointerEvents = 'none'; // host kesinlikle click yakalamasın
+
+      if (mode === 'local') {
+        // LOCAL: host is the viewport container
+        this.style.width = '100%';
+        this.style.height = '100%';
+        this.style.minHeight = '1px';
+        this.style.pointerEvents = 'auto';
+      } else {
+        // GLOBAL: host is click-through (0x0)
+        this.style.width = '0';
+        this.style.height = '0';
+        this.style.minHeight = '0';
+        this.style.pointerEvents = 'none'; // host kesinlikle click yakalamasın
+      }
 
 
       // Prepare layer roots (menu always visible, content toggles)
@@ -738,7 +784,7 @@ class overlayprocard extends HTMLElement {
     async _openEmbedderById(embedId, { fromHash = false } = {}) {
       const active = this._getActiveEmbedderSettings(embedId);
       if (!active) {
-        this.warn(`⚠️ Overlay Pro Card: embedder not defined for ${embedId}`);
+        this._warn(`⚠️ Overlay Pro Card: embedder not defined for ${embedId}`);
         this._hideContentLayer();
         return;
       }
@@ -786,8 +832,15 @@ class overlayprocard extends HTMLElement {
     // --------------------------------------------------------------------------
 
     _setupHashControl() {
-      // Hash değişimini dinle
-      window.addEventListener('hashchange', () => this._checkHash());
+      // Hash değişimini dinle (LEAK FIX: bind once)
+      if (!this._boundHashChanged) {
+        this._boundHashChanged = () => this._checkHash();
+        window.addEventListener('hashchange', this._boundHashChanged);
+      }
+
+      // FIX: setConfig/_loadCard tekrar çağrılsa bile ilk kontrolü flood etme
+      if (this._hashControlInitDone) return;
+      this._hashControlInitDone = true;
 
       // İlk yüklemede kontrol et
       setTimeout(() => this._checkHash(), 100);
@@ -796,8 +849,11 @@ class overlayprocard extends HTMLElement {
     _checkHash() {
       const hash = window.location.hash; // Örnek: #embed_001
 
-      // Ensure roots exist (menu must remain)
-      this._ensureLayerRoots();
+      // FIX: Menu'yu her hash değişiminde re-render etme (blink/flash fix)
+      // Sadece root'lar yoksa oluştur.
+      if (!this._menuRoot || !this._contentRoot || !this._portalRoot) {
+        this._ensureLayerRoots();
+      }
 
       // Legacy menu_only ONLY means "no legacy single embed" (but embedders[] can still work)
       const hasList = this._hasEmbeddersList();
@@ -809,7 +865,7 @@ class overlayprocard extends HTMLElement {
       // If we have embedders list => open matching embedder from list
       if (hasList) {
         if (hashId && this._getEmbedderDef(hashId)) {
-          this.log(`✅ Overlay Pro Card: Hash matched (list)! Opening embedder ${hashId}`);
+          this._log(`✅ Overlay Pro Card: Hash matched (list)! Opening embedder ${hashId}`);
           this._openEmbedderById(hashId, { fromHash: true });
         } else {
           // No match => hide
@@ -826,10 +882,10 @@ class overlayprocard extends HTMLElement {
       }
 
       const myHash = `#embed_${this._config.embed_id}`; // #embed_001
-      this.log(`🔗 Overlay Pro Card: Hash check - Current: "${hash}", My hash: "${myHash}"`);
+      this._log(`🔗 Overlay Pro Card: Hash check - Current: "${hash}", My hash: "${myHash}"`);
 
       if (hash === myHash) {
-        this.log(`✅ Overlay Pro Card: Hash matched! Opening embedder ${this._config.embed_id}`);
+        this._log(`✅ Overlay Pro Card: Hash matched! Opening embedder ${this._config.embed_id}`);
         this._showContentLayer();
         this._closeOtherEmbedders();
       } else {
@@ -841,7 +897,7 @@ class overlayprocard extends HTMLElement {
       // Aynı view'deki diğer embedder'ları bul
       const view = this.closest('hui-view');
       if (!view) {
-        this.log('⚠️ Overlay Pro Card: No view found for closing others');
+        this._log('⚠️ Overlay Pro Card: No view found for closing others');
         return;
       }
       
@@ -860,14 +916,14 @@ class overlayprocard extends HTMLElement {
         }
       });
       
-      this.log(`📌 Overlay Pro Card: Closed ${closedCount} other embedder(s)`);
+      this._log(`📌 Overlay Pro Card: Closed ${closedCount} other embedder(s)`);
     }
   
     // --------------------------------------------------------------------------
     // Card Discovery Function - search algorithm
     // --------------------------------------------------------------------------
     async _findCardByEmbedId(dashboard, targetId, showTitle = true) {
-      this.log(`🔍 Overlay Pro Card: Searching for card #${targetId} in '${dashboard}'`);
+      this._log(`🔍 Overlay Pro Card: Searching for card #${targetId} in '${dashboard}'`);
       
       try {
         // Fetch dashboard configuration
@@ -884,10 +940,10 @@ class overlayprocard extends HTMLElement {
         }
   
         if (searchResult.duplicate) {
-          this.warn(`⚠️ Overlay Pro Card: Duplicate embed ID #${targetId} found! Using first occurrence.`);
+          this._warn(`⚠️ Overlay Pro Card: Duplicate embed ID #${targetId} found! Using first occurrence.`);
         }
   
-        this.log(`✅ Overlay Pro Card: Successfully located card #${targetId} in ${dashboard}`);
+        this._log(`✅ Overlay Pro Card: Successfully located card #${targetId} in ${dashboard}`);
         
         // Kaynak kartın title'ını gizle (show_title: false ise)
         if (showTitle === false && searchResult.card.title) {
@@ -927,7 +983,7 @@ class overlayprocard extends HTMLElement {
                   duplicateFound = true;
                 } else {
                   foundCard = card;
-                  console.log(`   Found at path: ${cardPath} (via icon: ${card.icon})`);
+                  this._log(`   Found at path: ${cardPath} (via icon: ${card.icon})`);
                 }
               }
             }
@@ -1054,7 +1110,7 @@ class overlayprocard extends HTMLElement {
           closeButton.addEventListener('click', () => {
             this._hideContentLayer();
             this._clearHash();
-            console.log(`❌ Overlay Pro Card: Closed via X button - embed_id: ${(active && active.embed_id) ? active.embed_id : '???'}`);
+            this._log(`❌ Overlay Pro Card: Closed via X button - embed_id: ${(active && active.embed_id) ? active.embed_id : '???'}`);
           });
           
           header.appendChild(closeButton);
@@ -1108,14 +1164,18 @@ class overlayprocard extends HTMLElement {
       // Controls: console.log verbosity for development
       // ------------------------------------------------------------------------
       
-      this.log(`🎉 Overlay Pro Card successfully embedded card #${this._config.embed_id}`);
-      this._log(`   Dashboard: ${this._config.dashboard}`);
-      this._log(`   Embedder Title: "${this._config.embedder_title}"`);
-      this._log(`   Show Close: ${this._config.show_close}`);
-      this._log(`   Show Title: ${this._config.show_title}`);
-      this._log(`   Default Visible (CONTENT): ${this._config.default_visible}`);
-      this._log(`   Menu Enabled: ${this._config.menu && this._config.menu.enabled}`);
-      this._log(`   Hash Control: ACTIVE (use #embed_${this._config.embed_id})`);
+      const dbg = this._getActiveEmbedderSettings();
+      const dbgId = (dbg && dbg.embed_id) ? dbg.embed_id : (this._config ? this._config.embed_id : '???');
+      const dbgDash = (dbg && dbg.dashboard) ? dbg.dashboard : (this._config ? this._config.dashboard : '???');
+
+      this._log(`🎉 Overlay Pro Card successfully embedded card #${dbgId}`);
+      this._log(`   Dashboard: ${dbgDash}`);
+      this._log(`   Embedder Title: "${(dbg && dbg.embedder_title) ? dbg.embedder_title : ''}"`);
+      this._log(`   Show Close: ${!!(dbg && dbg.show_close)}`);
+      this._log(`   Show Title: ${(dbg ? (dbg.show_title !== false) : (this._config && this._config.show_title !== false))}`);
+      this._log(`   Default Visible (CONTENT): ${!!(dbg && dbg.default_visible)}`);
+      this._log(`   Menu Enabled: ${!!(this._config && this._config.menu && this._config.menu.enabled)}`);
+      this._log(`   Hash Control: ACTIVE (use #embed_${dbgId})`);
     }
   
     // --------------------------------------------------------------------------
@@ -1140,14 +1200,25 @@ class overlayprocard extends HTMLElement {
         this._clearHash();
       }
     }
-    
+
+    // --------------------------------------------------------------------------
+    // Lifecycle: Cleanup (FIXED - was broken by copy/paste)
+    // --------------------------------------------------------------------------
     disconnectedCallback() {
       // SETTING: VIEW_VISIBILITY_GUARD
       this._teardownViewVisibilityGuard();
 
-      // Portal cleanup (menu/content body'den kaldır)
+      // FIX: Hash control listener cleanup
       try {
+        if (this._boundHashChanged) {
+          window.removeEventListener('hashchange', this._boundHashChanged);
+          this._boundHashChanged = null;
+        }
+        this._hashControlInitDone = false;
+      } catch (e) {}
 
+      // Portal cleanup (menu/content kaldır)
+      try {
         if (this._menuRoot && this._menuRoot.parentNode) {
           this._menuRoot.parentNode.removeChild(this._menuRoot);
         }
@@ -1177,7 +1248,23 @@ class overlayprocard extends HTMLElement {
       }
     }
   }
-  
+
+// ============================================================================
+// Overlay Pro Card - Startup Banner (ALWAYS VISIBLE)
+// ============================================================================
+
+const overlayTitle = '  OVERLAY[PRO]-CARD ';
+const overlayVersion = '  Version Faz.0.1    ';
+
+// Longest line width
+const overlayWidth = Math.max(overlayTitle.length, overlayVersion.length);
+
+console.info(
+  `%c${overlayTitle.padEnd(overlayWidth)}\n%c${overlayVersion.padEnd(overlayWidth)}`,
+  'color: lime; font-weight: bold; background: black',
+  'color: white; font-weight: bold; background: dimgray'
+);
+ 
   // ============================================================================
   // Custom Element Registration - SIMPLE & COMPATIBLE
   // ============================================================================
@@ -1209,7 +1296,7 @@ class overlayprocard extends HTMLElement {
         });
         
         const usedIds = new Set();
-        const iconPattern = /^EMBED#(\d{3})$/gi;
+        const iconPattern = /^EMBED#(\d{3})$/i;
         
         const collectIds = (cards) => {
           if (!cards) return;
@@ -1217,8 +1304,8 @@ class overlayprocard extends HTMLElement {
           cards.forEach(card => {
             if (card && typeof card === 'object') {
               if (card.icon) {
-                const match = card.icon.match(iconPattern);
-                if (match) usedIds.add(match[1]);
+                const match = iconPattern.exec(card.icon);
+                if (match && match[1]) usedIds.add(match[1]);
               }
               
               if (card.cards) {
