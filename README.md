@@ -4,8 +4,9 @@
 
 <img src="https://raw.githubusercontent.com/levonisyas/overlaypro-card/main/demo/demo.jpg" width="1200" alt="Overlay Pro Card">
 
+---
 
-Overlay Pro Card is an evolution of the Picture Elements concept:
+**Overlay Pro Card is an evolution of the Picture Elements concept:**
 
 - Instead of placing icons or images on top of a dashboard…
 - It places **real Lovelace cards** as floating popup overlays
@@ -122,9 +123,9 @@ icon: EMBED#001
 This can be **any Lovelace card type**:
 
 ```yaml
-type: <Your_Card_Type>          
-icon: EMBED#001                  # REQUIRED: Add this line *IMPORTANT* Embed source ID (001–999)
+type: <Your_Card_Type> 
 title: <Your_Card_Name>          
+icon: EMBED#001  # REQUIRED: Add this line *IMPORTANT* Embed source ID (001–999)        
 ```
 
 The only required rule is:
@@ -143,9 +144,9 @@ Overlay Pro Card automatically searches the dashboard for the matching SOURCE ca
 
 To open a popup, the following values must match:
 
-- `target: "001"` in the menu button  
-- `embed_id: "001"` in the popup definition  
 - `icon: EMBED#001` in the source card  
+- `target: "001"` in the menu button  
+- `embed_id: "001"` in the embedder entry 
 - `dashboard: lovelace` in the embedder entry — use the exact view URL path (this is what appears in the browser address bar)
 
 All four must align for the popup to function.
@@ -158,7 +159,7 @@ All four must align for the popup to function.
   buttons:
     - label: <Your_Buton_Label>  
       icon: mdi:<Your_Buton_Icon>
-      target: "001"            # REQUIRED: Must match embed_id below *IMPORTANT*
+      target: "001"  # REQUIRED: Must match embed_id below *IMPORTANT*
 ```
 
 ---
@@ -167,8 +168,8 @@ All four must align for the popup to function.
 
 ```yaml
 embedders:
-  - embed_id: "001"          # REQUIRED: 3-digit ID (001-999) *IMPORTANT*
-    dashboard: lovelace      # REQUIRED: Dashboard name/path — must match the view’s URL path exactly (case‑sensitive) *IMPORTANT*
+  - embed_id: "001"      # REQUIRED: 3-digit ID (001-999) *IMPORTANT*
+    dashboard: lovelace  # REQUIRED: Dashboard name/path — must match the view’s URL path exactly (case‑sensitive) *IMPORTANT*
 ```
 
 ---
@@ -194,28 +195,28 @@ Positioning per popup
 
 ```yaml
 type: custom:overlaypro-card
-portal_mode: global/local           # OPTIONAL: global MODE Mounts UI layers into document.body. // local MODE Mounts overlay layers inside the card itself
+portal_mode: global / local  # OPTIONAL: global MODE Mounts UI layers into document.body. // local MODE Mounts overlay layers inside the card itself
 overlay_log: true / false
 # ----------------------------
 # MENU SETTINGS (OPTIONAL)
 # ----------------------------
 menu:
-  enabled: true                # OPTIONAL: Enable menu buttons (default: false)
+  enabled: true            # OPTIONAL: Enable menu buttons (default: false)
 
-  position:                    # OPTIONAL: Menu CSS style
-    mode: fixed                # OPTIONAL: fixed | absolute (default: fixed)
-    bottom: 15%                # OPTIONAL: Vertical position (use either top OR bottom). Accepts CSS values: %, px, vh, rem...
-    right: 10%                 # OPTIONAL: Horizontal position (use either left OR right). Accepts CSS values: %, px, vw, rem...
-    z_index: 1100              # OPTIONAL: Menu layer priority (default: 1100)
+  position:                # OPTIONAL: Menu CSS style
+    mode: fixed            # OPTIONAL: fixed | absolute (default: fixed)
+    bottom: 15%            # OPTIONAL: Vertical position (use either top OR bottom). Accepts CSS values: %, px, vh, rem...
+    right: 10%             # OPTIONAL: Horizontal position (use either left OR right). Accepts CSS values: %, px, vw, rem...
+    z_index: 1100          # OPTIONAL: Menu layer priority (default: 1100)
 
-  button_style: |              # OPTIONAL: Static button CSS style
+  button_style: |          # OPTIONAL: Static button CSS style
     background: black;
     color: white;
 
   buttons:
-    - label: Lights            # OPTIONAL: Button label
-      icon: mdi:lightbulb      # OPTIONAL: Button icon
-      target: "001"            # REQUIRED: Must match embed_id below *IMPORTANT*
+    - label: Lights        # OPTIONAL: Button label
+      icon: mdi:lightbulb  # OPTIONAL: Button icon
+      target: "001"        # REQUIRED: Must match embed_id below *IMPORTANT*
 
     - label: Climate
       icon: mdi:thermostat
@@ -225,23 +226,23 @@ menu:
 # EMBEDDER POPUPS (REQUIRED)
 # ----------------------------
 embedders:
-  - embed_id: "001"          # REQUIRED: 3-digit ID (001-999) *IMPORTANT*
-    dashboard: lovelace      # REQUIRED: Source dashboard name/path *IMPORTANT*
-    show_title: false        # OPTIONAL: Hide source card title (default: true)
-    enable_scroll: true      # OPTIONAL: Enable scrolling for long content (default: true)
-    card_size: 2             # OPTIONAL: Card height scale 1-10 (default: 1)
-    show_close: true         # OPTIONAL: Show close (X) button in header (default: false)
-    embedder_title: ""       # OPTIONAL: Custom popup title string (default: empty)
-    default_visible: true    # OPTIONAL: Initial visibility on load (default: false)
+  - embed_id: "001"        # REQUIRED: 3-digit ID (001-999) *IMPORTANT*
+    dashboard: lovelace    # REQUIRED: Source dashboard name/path *IMPORTANT*
+    show_title: false      # OPTIONAL: Hide source card title (default: true)
+    enable_scroll: true    # OPTIONAL: Enable scrolling for long content (default: true)
+    card_size: 2           # OPTIONAL: Card height scale 1-10 (default: 1)
+    show_close: true       # OPTIONAL: Show close (X) button in header (default: false)
+    embedder_title: ""     # OPTIONAL: Custom popup title string (default: empty)
+    default_visible: true  # OPTIONAL: Initial visibility on load (default: false)
 
     content:
-      position:              # OPTIONAL: Popup CSS style
-        mode: fixed          # OPTIONAL: fixed | absolute (default: fixed)
-        top: 15%             # OPTIONAL: Vertical position (use either top OR bottom). Accepts CSS values: %, px, vh, rem...
-        right: 5%            # OPTIONAL: Horizontal position (use either left OR right). Accepts CSS values: %, px, vw, rem...
-        width: 380px         # OPTIONAL: Popup width
-        height: 300px        # OPTIONAL: Popup height
-        z_index: 1000        # OPTIONAL: Popup layer priority (default: 1000)
+      position:            # OPTIONAL: Popup CSS style
+        mode: fixed        # OPTIONAL: fixed | absolute (default: fixed)
+        top: 15%           # OPTIONAL: Vertical position (use either top OR bottom). Accepts CSS values: %, px, vh, rem...
+        right: 5%          # OPTIONAL: Horizontal position (use either left OR right). Accepts CSS values: %, px, vw, rem...
+        width: 380px       # OPTIONAL: Popup width
+        height: 300px      # OPTIONAL: Popup height
+        z_index: 1000      # OPTIONAL: Popup layer priority (default: 1000)
 
   - embed_id: "002"
     dashboard: lovelace
