@@ -1,4 +1,4 @@
-# Overlay Pro Card Card for Home Assistant
+# Overlay Pro Card — Engine Powering Overlay Popup UI Layers
 
 [![HACS Default](https://raw.githubusercontent.com/levonisyas/overlaypro-card/refs/heads/main/badges/hacs-default.svg)](https://hacs.xyz/) [![License](https://raw.githubusercontent.com/levonisyas/overlaypro-card/refs/heads/main/badges/license.svg)](LICENSE) [![Latest Release](https://img.shields.io/github/v/release/levonisyas/overlaypro-card)](https://github.com/levonisyas/overlaypro-card/releases)  
 
