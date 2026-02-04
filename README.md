@@ -1,5 +1,7 @@
 # Overlay Pro Card Card for Home Assistant
 
+[![HACS Default](https://raw.githubusercontent.com/levonisyas/overlaypro-card/refs/heads/main/badges/hacs-default.svg)](https://hacs.xyz/) [![License](https://raw.githubusercontent.com/levonisyas/overlaypro-card/refs/heads/main/badges/license.svg)](LICENSE) [![Latest Release](https://img.shields.io/github/v/release/levonisyas/overlaypro-card)](https://github.com/levonisyas/overlaypro-card/releases)  
+
 <img src="https://raw.githubusercontent.com/levonisyas/overlaypro-card/main/demo/demo.jpg" width="1200" alt="Overlay Pro Card">
 
 
@@ -39,18 +41,26 @@ Overlay Pro Card provides:
 
 ---
 
+## Project Vision
+
+**Overlay Pro Card is part of a future 3-module ecosystem:**
+
+>- Floor3D Pro Card → 3D Scene Engine  
+>- Overlay Pro Card → UI Overlay Engine  
+>- Scene3D → Full Interactive 3D Dashboard Platform
+
+---
+
 ## Installation
 
-### HACS (Recommended)
+### Method 1: HACS (Recommended)
 
-1. Open HACS
-2. Go to Frontend
-3. Add this repository as a custom repo:
+1. Open **HACS** in Home Assistant.
+2. Search for: **Overlay Pro Card**.
+3. Select the repository and click **Download**.
+4. **Restart Home Assistant.**
 
-   `https://github.com/levonisyas/overlaypro-card`
-
-4. Install **Overlay Pro Card**
-5. Restart Home Assistant
+After installation, HACS will automatically register the card as a Lovelace resource.
 
 ---
 
@@ -74,15 +84,34 @@ resources:
 
 ---
 
+### Notes
+
+* No custom repository setup is required anymore, since Overlay Pro is now included in the official **HACS Default Repository Store**.  
+* Manual installation is only recommended for advanced or offline setups.  
+
+---
+
 ## Core Concept
 
-Overlay Pro Card works in 2 steps:
+Overlay Pro Card becomes fully functional as soon as it is installed through HACS, because the card already includes a **working demo configuration** inside its YAML editor.  
+Users only need to adjust the **REQUIRED** fields correctly, and the popups will work immediately.
+
+To successfully open a popup, **four YAML fields must match**:
+
+- `icon: EMBED#001` in the **source card**  
+- `target: "001"` in the **menu button**  
+- `embed_id: "001"` in the **embedder entry**  
+- `dashboard: lovelace` in the **embedder entry** — must match the **exact view URL path**
+
+When all four values are correct, Overlay Pro can locate the source card and display it as a popup.
+
+Overlay Pro operates in **two simple steps**:
 
 ---
 
 ## Step 1 — Define a SOURCE Card
 
-Any Lovelace card becomes embeddable by adding:
+Any Lovelace card can become an embeddable “source card” by adding:
 
 ```yaml
 icon: EMBED#001
@@ -93,11 +122,9 @@ icon: EMBED#001
 This can be **any Lovelace card type**:
 
 ```yaml
-type: <YOUR_CARD_TYPE>           # Example: entities, thermostat, grid, custom:...
+type: <Your_Card_Type>          
 icon: EMBED#001                  # REQUIRED: Add this line *IMPORTANT* Embed source ID (001–999)
-title: <YOUR_CARD_NAME>          # Example: Living Room Controls
-entities:
-  - <YOUR_ENTITY_1>              # Example: light.living_room
+title: <Your_Card_Name>          
 ```
 
 The only required rule is:
@@ -106,12 +133,47 @@ The only required rule is:
 icon: EMBED#001
 ```
 
+This marks the card as a **SOURCE** that Overlay Pro can locate and open as a popup.
+
 ---
 
 ## Step 2 — Open it as an Overlay Popup
 
-Overlay Pro Card locates the source card and displays it as a floating popup.
-Overlay Pro Card will search the dashboard and embed it dynamically.
+Overlay Pro Card automatically searches the dashboard for the matching SOURCE card and displays it as a floating popup.
+
+To open a popup, the following values must match:
+
+- `target: "001"` in the menu button  
+- `embed_id: "001"` in the popup definition  
+- `icon: EMBED#001` in the source card  
+- `dashboard: lovelace` in the embedder entry — use the exact view URL path (this is what appears in the browser address bar)
+
+All four must align for the popup to function.
+
+---
+
+### A) Add a target to a menu button
+
+```yaml
+  buttons:
+    - label: <Your_Buton_Label>  
+      icon: mdi:<Your_Buton_Icon>
+      target: "001"            # REQUIRED: Must match embed_id below *IMPORTANT*
+```
+
+---
+
+### B) Add the matching embedder settings
+
+```yaml
+embedders:
+  - embed_id: "001"          # REQUIRED: 3-digit ID (001-999) *IMPORTANT*
+    dashboard: lovelace      # REQUIRED: Dashboard name/path — must match the view’s URL path exactly (case‑sensitive) *IMPORTANT*
+```
+
+---
+
+If these three values match (`EMBED#001` → `target: "001"` → `embed_id: "001"`) **and the `dashboard` value correctly matches the view’s URL path**, the popup opens instantly — no extra setup required.
 
 ---
 
@@ -315,16 +377,6 @@ It only shows status + logs if missing.
   `display: none`
 
 So they do not block clicks behind them.
-
----
-
-## 🌍Project Vision
-
-Overlay Pro Card is part of a future 3-module ecosystem:
-
-1. Floor3D Pro → 3D Scene Engine  
-2. Overlay Pro Card → UI Overlay Engine  
-3. Dashboard3D → Full Interactive 3D Dashboard Platform
 
 ---
 

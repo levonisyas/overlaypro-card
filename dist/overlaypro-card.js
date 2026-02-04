@@ -4,16 +4,103 @@
 
 class overlayprocard extends HTMLElement {
     // --------------------------------------------------------------------------
+    // SETTING: STUB_CONFIG (HACS DEMO)
+    // - Visual editor "Show code editor" için demo config üretir
+    // - Floor3D örneği gibi /hacsfiles veya /local/community yolunu otomatik seçer
+    // --------------------------------------------------------------------------
+    static getStubConfig(hass, entities, entitiesFallback) {
+      void hass;
+      void entities;
+      void entitiesFallback;
+
+      const url = new URL(import.meta.url);
+      let asset = url.pathname.split('/').pop();
+      let path = url.pathname.replace(asset, '');
+
+      // HACS install path auto-detect
+      if (path.includes('hacsfiles')) {
+        path = '/local/community/overlaypro-card/';
+      }
+
+      // DEMO: ready-to-paste style (works best if you add source cards with icon: EMBED#001, EMBED#002)
+      return {
+        // overlay_log: false => default OFF (no debug spam)
+        overlay_log: false,
+
+        // portal_mode: "global" => default (you can set "local")
+        portal_mode: 'global',
+
+        menu: {
+          enabled: true,
+          position: {
+            mode: 'fixed',
+            bottom: '15%',
+            right: '10%',
+            z_index: 1100
+          },
+          buttons: [
+            { label: 'Lights', icon: 'mdi:lightbulb', target: '001' },
+            { label: 'Climate', icon: 'mdi:thermostat', target: '002' }
+          ]
+        },
+
+        // NOTE: dashboards are examples - change if needed
+        embedders: [
+          {
+            embed_id: '001',
+            dashboard: 'lovelace',
+            embedder_title: 'Lights',
+            show_close: true,
+            show_title: true,
+            default_visible: false,
+            enable_scroll: true,
+            content: {
+              position: {
+                mode: 'fixed',
+                bottom: '35%',
+                right: '15%',
+                width: '280px',
+                height: '100px',
+                z_index: 1000
+              }
+            }
+          },
+          {
+            embed_id: '002',
+            dashboard: 'lovelace',
+            embedder_title: 'Climate',
+            show_close: true,
+            show_title: true,
+            default_visible: false,
+            enable_scroll: true,
+            content: {
+              position: {
+                mode: 'fixed',
+                top: '15%',
+                right: '35%',
+                width: '380px',
+                height: '300px',
+                z_index: 1000
+              }
+            }
+          }
+        ]
+      };
+    }
+
+    // --------------------------------------------------------------------------
     // SETTING: OVERLAY_LOG
     // --------------------------------------------------------------------------
     _log(...args) {
       try {
-        if (this._config && this._config.overlay_log === true) console.log(...args);
+        const enabled = !!(this._config && this._config.overlay_log === true);
+        if (enabled) console.log(...args);
       } catch (e) {}
     }
     _warn(...args) {
       try {
-        if (this._config && this._config.overlay_log === true) console.warn(...args);
+        const enabled = !!(this._config && this._config.overlay_log === true);
+        if (enabled) console.warn(...args);
       } catch (e) {}
     }
     _error(...args) {
@@ -112,12 +199,18 @@ class overlayprocard extends HTMLElement {
         enable_scroll: config.enable_scroll !== false, // legacy single-embed default: true
         // SETTING: OVERLAY_LOG
         // Controls: console log/warn verbosity
-        // Default: false
+        // YAML:
+        //   overlay_log: true  => ON (legacy)
+        //   overlay_log: []    => OFF (default)
+        //   overlay_log: [...] => ON (future flags)
+        // SETTING: OVERLAY_LOG
+        // YAML:
+        //   overlay_log: true|false
         overlay_log: (config.overlay_log === true),
 
         // SETTING: PORTAL_MODE
-        // "global" (default) = mount to document.body
-        // "local"            = mount inside this card (container)
+        // YAML:
+        //   portal_mode: "global" | "local"
         portal_mode: (config.portal_mode === 'local') ? 'local' : 'global',
 
         // Legacy header defaults (only used when NOT using embedders[])
@@ -163,7 +256,7 @@ class overlayprocard extends HTMLElement {
       // hass'ı burada sıfırlamayalım; state reset yapıp yeniden render edelim.
       this._loaded = false;
       // SETTING: OVERLAY_LOG (global flag for helper functions too)
-      window.__OVERLAY_PRO_LOG = (this._config && this._config.overlay_log === true);
+      window.__OVERLAY_PRO_LOG = !!(this._config && this._config.overlay_log === true);
 
       // --------------------------------------------------------------------------
       // SETTING: VIEW_VISIBILITY_GUARD (Etap.1 Fix)
@@ -256,7 +349,17 @@ class overlayprocard extends HTMLElement {
 
         // Also react to route/view changes
         if (!this._boundLocationChanged) {
+          // FIX: Seed route key so the FIRST hashchange does NOT trigger guard flow.
+          // Otherwise first menu click can cause duplicate _checkHash() / duplicate logs.
+          this._lastRouteKey = window.location.pathname + window.location.search;
+
           this._boundLocationChanged = () => {
+            // FIX: Ignore hash-only changes (menu buttons change hash; should NOT trigger view-guard)
+            // Route key excludes hash to prevent duplicate _checkHash() / duplicate logs.
+            const routeKey = window.location.pathname + window.location.search;
+            if (this._lastRouteKey === routeKey) return;
+            this._lastRouteKey = routeKey;
+
             setTimeout(() => {
               // “isConnected + offsetParent” = pratik görünürlük check
               // Always hide first (prevents menu sticking on other dashboards)
@@ -269,6 +372,7 @@ class overlayprocard extends HTMLElement {
               }, 50);
             }, 0);
           };
+
           window.addEventListener('location-changed', this._boundLocationChanged);
           // EXTRA: HA navigation sometimes does not trigger IntersectionObserver correctly
           // Force-hide portal UI on all navigation events
@@ -648,14 +752,30 @@ class overlayprocard extends HTMLElement {
 
       // Loading indicator goes to content layer only
       this._showContentLayer();
+      const initIdRaw =
+        (this._config && this._config.embed_id != null)
+          ? String(this._config.embed_id).padStart(3, '0')
+          : null;
+
+      const initIcon = initIdRaw ? `EMBED#${initIdRaw}` : null;
+
       this._contentRoot.innerHTML = `
         <div style="padding: 20px; text-align: center; color: var(--primary-color);">
           <div style="font-style: italic; margin-bottom: 10px;">
             Overlay Pro Card initializing...
           </div>
           <div style="font-size: 0.9em; color: var(--secondary-text-color);">
-            Searching for card ID: <strong>${this._config.embed_id}</strong>
+            ${initIcon
+              ? `Searching for source card (icon): <strong>${initIcon}</strong>`
+              : `Waiting for menu selection...`
+            }
           </div>
+          ${initIcon ? `
+          <div style="margin-top: 10px; font-size: 0.85em; color: var(--secondary-text-color);">
+            If not found, add to your source card:<br>
+            <code>icon: ${initIcon}</code>
+          </div>
+          ` : ``}
         </div>
       `;
 
@@ -718,8 +838,8 @@ class overlayprocard extends HTMLElement {
             </div>
             <div style="font-size: 0.9em; color: var(--secondary-text-color);">
               <strong>Troubleshooting tips:</strong><br>
-              1. Add <code>icon: EMBED#${this._config.embed_id}</code> to your source card<br>
-              2. Verify dashboard name: "${this._config.dashboard}"<br>
+              1. Add <code>icon: EMBED#${(this._activeEmbedId || this._config.embed_id || '001')}</code> to your source card<br>
+              2. Verify dashboard name: "${((this._getActiveEmbedderSettings && this._getActiveEmbedderSettings()) ? (this._getActiveEmbedderSettings().dashboard || this._config.dashboard) : (this._config.dashboard))}"<br>
               3. Ensure embed_id is unique (001-999)
             </div>
           </div>
@@ -800,13 +920,22 @@ class overlayprocard extends HTMLElement {
 
       // Show loading + render embedded source card
       this._showContentLayer();
+      const initId = String(active.embed_id || '').padStart(3, '0');
+      const initIcon = `EMBED#${initId}`;
+
       this._contentRoot.innerHTML = `
         <div style="padding: 20px; text-align: center; color: var(--primary-color);">
           <div style="font-style: italic; margin-bottom: 10px;">
             Overlay Pro Card initializing...
           </div>
+
           <div style="font-size: 0.9em; color: var(--secondary-text-color);">
-            Searching for card ID: <strong>${active.embed_id}</strong>
+            Searching for source card (icon): <strong>${initIcon}</strong>
+          </div>
+
+          <div style="margin-top: 10px; font-size: 0.85em; color: var(--secondary-text-color);">
+            If not found, add to your source card:<br>
+            <code>icon: ${initIcon}</code>
           </div>
         </div>
       `;
@@ -848,6 +977,13 @@ class overlayprocard extends HTMLElement {
     
     _checkHash() {
       const hash = window.location.hash; // Örnek: #embed_001
+      // FIX: Duplicate hash processing guard (prevents double logs on first click / refresh)
+      // Some flows can call _checkHash twice in quick succession (hashchange + visibility guard / init timer).
+      if (this._lastHandledHash === hash && (Date.now() - (this._lastHandledHashAt || 0)) < 250) {
+        return;
+      }
+      this._lastHandledHash = hash;
+      this._lastHandledHashAt = Date.now();
 
       // FIX: Menu'yu her hash değişiminde re-render etme (blink/flash fix)
       // Sadece root'lar yoksa oluştur.
@@ -864,7 +1000,7 @@ class overlayprocard extends HTMLElement {
 
       // If we have embedders list => open matching embedder from list
       if (hasList) {
-        if (hashId && this._getEmbedderDef(hashId)) {
+        if (hashId && this._getEmbedderDef(hashId)) { 
           this._log(`✅ Overlay Pro Card: Hash matched (list)! Opening embedder ${hashId}`);
           this._openEmbedderById(hashId, { fromHash: true });
         } else {
@@ -1233,6 +1369,10 @@ class overlayprocard extends HTMLElement {
       this._portalRoot = null;
       this._menuRoot = null;
       this._contentRoot = null;
+      // FIX: reset hash dedupe state
+      this._lastHandledHash = null;
+      this._lastHandledHashAt = 0;
+
     }
     
     toggle() {
@@ -1254,7 +1394,7 @@ class overlayprocard extends HTMLElement {
 // ============================================================================
 
 const overlayTitle = '  OVERLAY[PRO]-CARD ';
-const overlayVersion = '  Version Faz.0.1    ';
+const overlayVersion = '  Version Faz.1    ';
 
 // Longest line width
 const overlayWidth = Math.max(overlayTitle.length, overlayVersion.length);
