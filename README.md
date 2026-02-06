@@ -1,8 +1,14 @@
 # Overlay Pro Card — Engine Powering Overlay Popup UI Layers
 
-[![HACS Default](https://raw.githubusercontent.com/levonisyas/overlaypro-card/refs/heads/main/badges/hacs-default.svg)](https://hacs.xyz/) [![License](https://raw.githubusercontent.com/levonisyas/overlaypro-card/refs/heads/main/badges/license.svg)](LICENSE) [![Latest Release](https://img.shields.io/github/v/release/levonisyas/overlaypro-card)](https://github.com/levonisyas/overlaypro-card/releases)  
+[![HACS Default](https://raw.githubusercontent.com/levonisyas/overlaypro-card/main/badges/hacs-default.svg)](https://hacs.xyz/) [![License](https://raw.githubusercontent.com/levonisyas/overlaypro-card/main/badges/license.svg)](LICENSE) [![Latest Release](https://img.shields.io/github/v/release/levonisyas/overlaypro-card)](https://github.com/levonisyas/overlaypro-card/releases)  
 
 <img src="https://raw.githubusercontent.com/levonisyas/overlaypro-card/main/demo/demo.jpg" width="1200" alt="Overlay Pro Card">
+
+---
+
+>## 🔗 Overlay Pro Card (source & documentation):
+>- **<https://github.com/levonisyas/overlaypro-card>**
+>- **<https://community.home-assistant.io/t/overlay-pro-card-engine-powering-overlay-popup-ui-layers/>**
 
 ---
 
@@ -196,6 +202,8 @@ Positioning per popup
 ```yaml
 type: custom:overlaypro-card
 portal_mode: global / local  # OPTIONAL: global MODE Mounts UI layers into document.body. // local MODE Mounts overlay layers inside the card itself
+multi_mode: true / false     # OPTIONAL: Enables multi-popup mode (multiple embedders can be open at the same time). When true, URL hash is disabled.
+                             # NOTE: After a browser refresh / page reload, all open popups will be closed (open state is not persisted).
 overlay_log: true / false
 # ----------------------------
 # MENU SETTINGS (OPTIONAL)
@@ -233,7 +241,7 @@ embedders:
     card_size: 2           # OPTIONAL: Card height scale 1-10 (default: 1)
     show_close: true       # OPTIONAL: Show close (X) button in header (default: false)
     embedder_title: ""     # OPTIONAL: Custom popup title string (default: empty)
-    default_visible: true  # OPTIONAL: Initial visibility on load (default: false)
+    default_visible: false # OPTIONAL: Initial visibility on load (default: false)
 
     content:
       position:            # OPTIONAL: Popup CSS style
@@ -290,6 +298,37 @@ Mounts overlay layers inside the card itself.
 
 ```yaml
 portal_mode: local
+```
+
+---
+
+### Multi Mode Support (Single vs Multi Popup)
+
+Overlay Pro supports two popup behaviors:
+
+#### `multi_mode: false` (Default)
+
+Single-popup mode:
+Only one embedder can be open at a time.
+
+* Uses URL hash state (`#embed_001`) for deterministic open/close
+* Works like a classic single-overlay system
+
+```yaml
+multi_mode: false
+```
+
+#### `multi_mode: true` (Multi Popup Engine)
+
+Multi-popup mode:
+Multiple embedders can be open at the same time.
+
+* URL hash is disabled (state is managed internally)
+* Each `embed_id` gets its own isolated popup root
+* **After a browser refresh / page reload, all open popups will be closed** (open state is not persisted)
+
+```yaml
+multi_mode: true
 ```
 
 ---
@@ -383,7 +422,7 @@ So they do not block clicks behind them.
 
 ## Support
 
-Found a bug or want a feature?
+Found a bug?
 
 Open an issue on GitHub:
 
@@ -434,16 +473,20 @@ Works with vertical-stack, horizontal-stack, and grid layouts. Embed ID can be p
 - Works with all standard and most custom cards
 - Not compatible with cards that dynamically change their `icon:` property
 
-## 🤝 Contributing & Support
 
-Found a bug or have a feature request? Please open an issue on GitHub.
+## 🤝 Enjoy ⭐ Support  
+
+I build these projects for **my own needs** and share them so others can benefit.  
+I don’t use donation links — so **please don’t buy me coffee** ☕  
+
+>If you enjoy this project, simply **⭐ star the repository**.  
+>Your feedback and contributions matter more than coffee.
+
 
 ## Development Notes
 This project was developed with a focus on:
 - Visual Editor compatibility
 - Simple, intuitive configuration
 - Maximum compatibility with existing setups
-- Performance optimization through AI-assisted algorithms
   
 *"From blueprints to code - building better solutions for smart homes."*
-

@@ -4,51 +4,40 @@
 
 class overlayprocard extends HTMLElement {
     // --------------------------------------------------------------------------
-    // SETTING: STUB_CONFIG (HACS DEMO)
-    // - Visual editor "Show code editor" için demo config üretir
-    // - Floor3D örneği gibi /hacsfiles veya /local/community yolunu otomatik seçer
+    // Lovelace UI: Default YAML (Stub Config)
+    // Home Assistant uses this when user adds the card from UI.
     // --------------------------------------------------------------------------
-    static getStubConfig(hass, entities, entitiesFallback) {
-      void hass;
-      void entities;
-      void entitiesFallback;
-
-      const url = new URL(import.meta.url);
-      let asset = url.pathname.split('/').pop();
-      let path = url.pathname.replace(asset, '');
-
-      // HACS install path auto-detect
-      if (path.includes('hacsfiles')) {
-        path = '/local/community/overlaypro-card/';
-      }
-
-      // DEMO: ready-to-paste style (works best if you add source cards with icon: EMBED#001, EMBED#002)
+    static getStubConfig() {
       return {
-        // overlay_log: false => default OFF (no debug spam)
         overlay_log: false,
-
-        // portal_mode: "global" => default (you can set "local")
         portal_mode: 'global',
-
+        multi_mode: false,
         menu: {
           enabled: true,
           position: {
             mode: 'fixed',
             bottom: '15%',
-            right: '10%',
+            right: '5%',
             z_index: 1100
           },
           buttons: [
-            { label: 'Lights', icon: 'mdi:lightbulb', target: '001' },
-            { label: 'Climate', icon: 'mdi:thermostat', target: '002' }
+            {
+              label: 'Lights',
+              icon: 'mdi:lightbulb',
+              target: '001'
+            },
+            {
+              label: 'Climate',
+              icon: 'mdi:thermostat',
+              target: '002'
+            }
           ]
         },
 
-        // NOTE: dashboards are examples - change if needed
         embedders: [
           {
             embed_id: '001',
-            dashboard: 'lovelace',
+            dashboard: 'dashboard-test',
             embedder_title: 'Lights',
             show_close: true,
             show_title: true,
@@ -57,17 +46,17 @@ class overlayprocard extends HTMLElement {
             content: {
               position: {
                 mode: 'fixed',
-                bottom: '35%',
-                right: '15%',
-                width: '280px',
-                height: '100px',
+                top: '15%',
+                right: '5%',
+                width: '300px',
+                height: '350px',
                 z_index: 1000
               }
             }
           },
           {
             embed_id: '002',
-            dashboard: 'lovelace',
+            dashboard: 'dashboard-test',
             embedder_title: 'Climate',
             show_close: true,
             show_title: true,
@@ -76,10 +65,10 @@ class overlayprocard extends HTMLElement {
             content: {
               position: {
                 mode: 'fixed',
-                top: '15%',
-                right: '35%',
-                width: '380px',
-                height: '300px',
+                top: '35%',
+                right: '15%',
+                width: '300px',
+                height: '350px',
                 z_index: 1000
               }
             }
@@ -93,20 +82,96 @@ class overlayprocard extends HTMLElement {
     // --------------------------------------------------------------------------
     _log(...args) {
       try {
-        const enabled = !!(this._config && this._config.overlay_log === true);
-        if (enabled) console.log(...args);
+        if (this._config && this._config.overlay_log === true) console.log(...args);
       } catch (e) {}
     }
     _warn(...args) {
       try {
-        const enabled = !!(this._config && this._config.overlay_log === true);
-        if (enabled) console.warn(...args);
+        if (this._config && this._config.overlay_log === true) console.warn(...args);
       } catch (e) {}
     }
     _error(...args) {
       try {
         console.error(...args);
       } catch (e) {}
+    }
+    // --------------------------------------------------------------------------
+    // BACKBONE GATE (Global/Local)
+    // Goal:
+    // - portal_mode=global => SINGLE roots + SINGLE hash listener + SINGLE owner instance
+    // - portal_mode=local  => per-instance behavior (unchanged)
+    // This eliminates duplicate triggers/logs/blink and prevents stale z-index click blocking.
+    // --------------------------------------------------------------------------
+
+    _getPortalMode() {
+      return (this._config && this._config.portal_mode) ? this._config.portal_mode : 'global';
+    }
+
+    _getGate() {
+      if (!window.__overlaypro_gate) {
+        window.__overlaypro_gate = {
+          instances: new Set(),
+          owner: null,
+          roots: null,
+          hashListener: null,
+          refCount: 0,
+        };
+      }
+      return window.__overlaypro_gate;
+    }
+
+    _electOwnerIfNeeded() {
+      const gate = this._getGate();
+
+      // If current owner is missing/disconnected, re-elect
+      if (gate.owner && (!gate.owner.isConnected)) {
+        gate.owner = null;
+      }
+      if (!gate.owner) {
+        for (const inst of gate.instances) {
+          if (inst && inst.isConnected) {
+            gate.owner = inst;
+            break;
+          }
+        }
+      }
+      return gate.owner;
+    }
+
+    _isGateOwner() {
+      const mode = this._getPortalMode();
+      if (mode === 'local') return true;
+      const gate = this._getGate();
+      this._electOwnerIfNeeded();
+      return gate.owner === this;
+    }
+
+    _registerGateInstance() {
+      const mode = this._getPortalMode();
+      if (mode === 'local') return;
+
+      const gate = this._getGate();
+      if (!gate.instances.has(this)) {
+        gate.instances.add(this);
+        gate.refCount++;
+      }
+      this._electOwnerIfNeeded();
+    }
+
+    _unregisterGateInstance() {
+      const mode = this._getPortalMode();
+      if (mode === 'local') return;
+
+      const gate = this._getGate();
+      if (gate.instances.has(this)) {
+        gate.instances.delete(this);
+        gate.refCount = Math.max(0, gate.refCount - 1);
+      }
+
+      if (gate.owner === this) {
+        gate.owner = null;
+        this._electOwnerIfNeeded();
+      }
     }
 
     // --------------------------------------------------------------------------
@@ -199,25 +264,25 @@ class overlayprocard extends HTMLElement {
         enable_scroll: config.enable_scroll !== false, // legacy single-embed default: true
         // SETTING: OVERLAY_LOG
         // Controls: console log/warn verbosity
-        // YAML:
-        //   overlay_log: true  => ON (legacy)
-        //   overlay_log: []    => OFF (default)
-        //   overlay_log: [...] => ON (future flags)
-        // SETTING: OVERLAY_LOG
-        // YAML:
-        //   overlay_log: true|false
+        // Default: false
         overlay_log: (config.overlay_log === true),
 
         // SETTING: PORTAL_MODE
-        // YAML:
-        //   portal_mode: "global" | "local"
+        // "global" (default) = mount to document.body
+        // "local"            = mount inside this card (container)
         portal_mode: (config.portal_mode === 'local') ? 'local' : 'global',
+        // SETTING: MULTI_MODE
+        // Controls: single popup vs multi popup
+        // Default: false
+        // NOTE: legacy "multi" still supported as fallback
+        multi_mode: (config.multi_mode === true) || (config.multi === true),
 
         // Legacy header defaults (only used when NOT using embedders[])
         show_close: config.show_close || false,
         embedder_title: config.embedder_title || '',
         show_title: config.show_title !== false,
-        default_visible: config.default_visible !== false,
+        // Default: false (overlay_log gibi). Sadece açıkça true yazılırsa açılır.
+        default_visible: (config.default_visible === true),
 
         // NEW: Sabit menü + overlay içerik (tek card içinde)
         menu: {
@@ -256,7 +321,7 @@ class overlayprocard extends HTMLElement {
       // hass'ı burada sıfırlamayalım; state reset yapıp yeniden render edelim.
       this._loaded = false;
       // SETTING: OVERLAY_LOG (global flag for helper functions too)
-      window.__OVERLAY_PRO_LOG = !!(this._config && this._config.overlay_log === true);
+      window.__OVERLAY_PRO_LOG = (this._config && this._config.overlay_log === true);
 
       // --------------------------------------------------------------------------
       // SETTING: VIEW_VISIBILITY_GUARD (Etap.1 Fix)
@@ -278,6 +343,15 @@ class overlayprocard extends HTMLElement {
       this._portalRoot = null;
       this._menuRoot = null;
       this._contentRoot = null;
+      // MULTI POPUP RUNTIME STATE
+      this._contentContainer = null;      // click-through container
+      this._contentRoots = new Map();     // embed_id -> root
+      this._openSet = new Set();          // open embed list
+      this._cardCache = new Map();        // embed_id -> card element
+      this._lastOpened = null;
+
+      // ENGINE: menu render dedupe state (prevents blink)
+      this._menuRenderKey = null;
 
       // Host temizle (ama portal body'de olduğu için asıl UI zaten orada)
       this.innerHTML = '';
@@ -317,11 +391,23 @@ class overlayprocard extends HTMLElement {
       }
 
       // Content: when portal inactive => force-hide (prevents click-block / stale overlays)
-      if (this._contentRoot) {
+      if (this._contentRoot || this._contentContainer) {
         if (!this._portalActive) {
-          this._contentRoot.style.display = 'none';
+          // SINGLE
+          if (this._contentRoot) {
+            this._contentRoot.style.display = 'none';
+            this._contentRoot.style.pointerEvents = 'none';
+          }
+
+          // MULTI: hide all roots
+          if (this._contentRoots && this._contentRoots.size > 0) {
+            for (const root of this._contentRoots.values()) {
+              root.style.display = 'none';
+              root.style.pointerEvents = 'none';
+            }
+          }
         } else {
-          // When active again, respect hash/default logic
+          // When active again, respect hash/default logic (single mode only)
           try {
             if (typeof this._checkHash === 'function') {
               this._checkHash();
@@ -349,17 +435,7 @@ class overlayprocard extends HTMLElement {
 
         // Also react to route/view changes
         if (!this._boundLocationChanged) {
-          // FIX: Seed route key so the FIRST hashchange does NOT trigger guard flow.
-          // Otherwise first menu click can cause duplicate _checkHash() / duplicate logs.
-          this._lastRouteKey = window.location.pathname + window.location.search;
-
           this._boundLocationChanged = () => {
-            // FIX: Ignore hash-only changes (menu buttons change hash; should NOT trigger view-guard)
-            // Route key excludes hash to prevent duplicate _checkHash() / duplicate logs.
-            const routeKey = window.location.pathname + window.location.search;
-            if (this._lastRouteKey === routeKey) return;
-            this._lastRouteKey = routeKey;
-
             setTimeout(() => {
               // “isConnected + offsetParent” = pratik görünürlük check
               // Always hide first (prevents menu sticking on other dashboards)
@@ -369,15 +445,13 @@ class overlayprocard extends HTMLElement {
               setTimeout(() => {
                 const visible = !!(this.isConnected && this.offsetParent !== null);
                 this._setPortalActive(visible);
-              }, 50);
+              }, 100);
             }, 0);
           };
-
           window.addEventListener('location-changed', this._boundLocationChanged);
           // EXTRA: HA navigation sometimes does not trigger IntersectionObserver correctly
-          // Force-hide portal UI on all navigation events
+          // Force-hide portal UI on real navigation events (NOT on hash changes)
           window.addEventListener('popstate', this._boundLocationChanged);
-          window.addEventListener('hashchange', this._boundLocationChanged);
 
         }
       } catch (e) {
@@ -395,7 +469,6 @@ class overlayprocard extends HTMLElement {
         if (this._boundLocationChanged) {
           window.removeEventListener('location-changed', this._boundLocationChanged);
           window.removeEventListener('popstate', this._boundLocationChanged);
-          window.removeEventListener('hashchange', this._boundLocationChanged);
 
           this._boundLocationChanged = null;
         }
@@ -409,22 +482,23 @@ class overlayprocard extends HTMLElement {
     // --------------------------------------------------------------------------
 
     connectedCallback() {
-      // Lovelace edit/save sonrası element yeniden bağlanabilir.
-      // Menü her zaman görünür olmalı.
       try {
+        // Gate registration (global only; local is no-op)
+        this._registerGateInstance();
+        this._electOwnerIfNeeded();
+
         this._ensureLayerRoots();
 
         // SETTING: VIEW_VISIBILITY_GUARD
         this._setupViewVisibilityGuard();
 
-        // content başlangıç görünürlüğü
+        // content başlangıç görünürlüğü (owner-only in global; local unchanged)
         if (this._config && this._config.default_visible) {
           this._showContentLayer();
         } else {
           this._hideContentLayer();
         }
 
-        // ensure correct state immediately
         const visible = !!(this.isConnected && this.offsetParent !== null);
         this._setPortalActive(visible);
 
@@ -451,17 +525,16 @@ class overlayprocard extends HTMLElement {
     // --------------------------------------------------------------------------
 
     _ensureLayerRoots() {
-      // PORTAL: Lovelace layout/overflow/transform yüzünden fixed elemanlar görünmez olabiliyor.
-      // Çözüm: Menü + content katmanlarını document.body altına taşımak.
       // SETTING: PORTAL_MODE
-      // global (default) => document.body
-      // local            => this (card container)
-      const mode = (this._config && this._config.portal_mode) ? this._config.portal_mode : 'global';
+      // global (default) => SINGLE roots on document.body (via backbone gate)
+      // local            => per-instance roots (unchanged)
+      const mode = this._getPortalMode();
 
-      // CLOSED SYSTEM:
-      // local  => mount inside this card (true local viewport)
-      // global => mount to document.body (legacy)
+      // Always register (global only). Safe in local (no-op).
+      this._registerGateInstance();
+
       const mountTarget = (mode === 'local') ? this : document.body;
+
       // =========================================================================
       // DEBUG: Portal mount mode log (ALWAYS visible, once)
       // =========================================================================
@@ -478,10 +551,69 @@ class overlayprocard extends HTMLElement {
         );
       }
 
+      // GLOBAL MODE: Use SINGLE shared roots.
+      if (mode !== 'local') {
+        const gate = this._getGate();
+        this._electOwnerIfNeeded();
+
+        // Create shared roots once
+        if (!gate.roots) {
+          const portalRoot = document.createElement('div');
+          portalRoot.className = 'overlaypro-card-portal';
+          portalRoot.style.cssText = `display: none;`;
+
+          const menuRoot = document.createElement('div');
+          menuRoot.className = 'overlaypro-card-menu-root';
+          menuRoot.style.pointerEvents = 'auto';
+
+          // SINGLE (legacy) root
+          const contentRoot = document.createElement('div');
+          contentRoot.className = 'overlaypro-card-content-root';
+          contentRoot.style.pointerEvents = 'auto';
+
+          // MULTI container (always exists, click-through)
+          const contentContainer = document.createElement('div');
+          contentContainer.className = 'overlaypro-card-content-container';
+          contentContainer.style.cssText = `
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 1000;
+          `;
+
+          document.body.appendChild(portalRoot);
+          document.body.appendChild(menuRoot);
+          document.body.appendChild(contentRoot);
+          document.body.appendChild(contentContainer);
+
+          gate.roots = { portalRoot, menuRoot, contentRoot, contentContainer };
+        }
+
+
+        // Bind this instance to shared roots
+        this._portalRoot = gate.roots.portalRoot;
+        this._menuRoot = gate.roots.menuRoot;
+        this._contentRoot = gate.roots.contentRoot;
+        this._contentContainer = gate.roots.contentContainer || null;
+
+        // Only OWNER should render/position (prevents blink + duplicate handlers)
+        if (!this._isGateOwner()) {
+          return;
+        }
+
+        this._applyMenuPositioning();
+
+        // SINGLE positioning (legacy root)
+        this._applyContentPositioning(this._getActiveEmbedderSettings(), this._contentRoot);
+
+        this._renderMenu();
+        return;
+      }
+
+      // LOCAL MODE: per-instance roots (original behavior)
       if (!this._portalRoot) {
         this._portalRoot = document.createElement('div');
         this._portalRoot.className = 'overlaypro-card-portal';
-        // Sadece cleanup için marker
         this._portalRoot.style.cssText = `display: none;`;
         mountTarget.appendChild(this._portalRoot);
       }
@@ -491,11 +623,8 @@ class overlayprocard extends HTMLElement {
         this._menuRoot.className = 'overlaypro-card-menu-root';
         this._menuRoot.style.pointerEvents = 'auto';
 
-        // LOCAL: roots overlay inside this card viewport
-        if (mode === 'local') {
-          this._menuRoot.style.position = 'absolute';
-          this._menuRoot.style.inset = '0';
-        }
+        this._menuRoot.style.position = 'absolute';
+        this._menuRoot.style.inset = '0';
 
         mountTarget.appendChild(this._menuRoot);
       }
@@ -506,21 +635,61 @@ class overlayprocard extends HTMLElement {
         this._contentRoot.className = 'overlaypro-card-content-root';
         this._contentRoot.style.pointerEvents = 'auto';
 
-        // LOCAL: roots overlay inside this card viewport
-        if (mode === 'local') {
-          this._contentRoot.style.position = 'absolute';
-          this._contentRoot.style.inset = '0';
-        }
+        this._contentRoot.style.position = 'absolute';
+        this._contentRoot.style.inset = '0';
 
         mountTarget.appendChild(this._contentRoot);
       }
-      // IMPORTANT: In embedders[] mode, do NOT override active popup positioning.
-      // If an embedder is active, apply its positioning; otherwise use global/default.
-      this._applyContentPositioning(this._getActiveEmbedderSettings());
+      // MULTI: click-through container (local mode)
+      if (!this._contentContainer) {
+        this._contentContainer = document.createElement('div');
+        this._contentContainer.className = 'overlaypro-card-content-container';
+        this._contentContainer.style.cssText = `
+          position: absolute;
+          inset: 0;
+          pointer-events: auto;
+          z-index: 1000;
+          background: transparent;
+        `;
+        mountTarget.appendChild(this._contentContainer);
+      }
 
-      // Render menu always (even if content hidden)
+      // SINGLE positioning (legacy root)
+      this._applyContentPositioning(this._getActiveEmbedderSettings(), this._contentRoot);
+
       this._renderMenu();
     }
+    // --------------------------------------------------------------------------
+    // MULTI POPUP: Root Factory
+    // --------------------------------------------------------------------------
+
+    _getOrCreateContentRootFor(embedId) {
+      if (!this._contentContainer) return null;
+
+      const id = String(embedId || '').padStart(3, '0');
+
+      if (!this._contentRoots) this._contentRoots = new Map();
+
+      if (this._contentRoots.has(id)) {
+        return this._contentRoots.get(id);
+      }
+
+      const root = document.createElement('div');
+      root.className = 'overlaypro-card-content-root';
+      root.dataset.id = id;
+
+      // CRITICAL:
+      // - container pointer-events: none
+      // - root pointer-events: auto
+      root.style.pointerEvents = 'auto';
+      root.style.display = 'none';
+
+      this._contentContainer.appendChild(root);
+      this._contentRoots.set(id, root);
+
+      return root;
+    }
+
     // --------------------------------------------------------------------------
     // SETTING: MENU_POSITION
     // Controls: menu top/left/right/bottom/z-index/mode
@@ -543,7 +712,7 @@ class overlayprocard extends HTMLElement {
       const hasVertical = (p.top != null) || (p.bottom != null);
       const hasHorizontal = (p.left != null) || (p.right != null);
 
-      if (!hasVertical) this._menuRoot.style.top = '100px';
+      if (!hasVertical) this._menuRoot.style.bottom = '20px';
       if (!hasHorizontal) this._menuRoot.style.right = '20px';
 
       if (p.top != null) this._menuRoot.style.top = toPx(p.top);
@@ -556,7 +725,7 @@ class overlayprocard extends HTMLElement {
     // Controls: popup width/height/top/left/z-index
     // --------------------------------------------------------------------------
 
-    _applyContentPositioning(active = null) {
+    _applyContentPositioning(active = null, rootEl = null) {
       const cfgPos =
         (active && active.content && active.content.position)
           ? active.content.position
@@ -565,54 +734,102 @@ class overlayprocard extends HTMLElement {
       const p = cfgPos || {};
       const toPx = (v) => (typeof v === 'number' ? `${v}px` : v);
 
-      this._contentRoot.style.position = p.mode || 'fixed';
-      this._contentRoot.style.zIndex = String(p.z_index ?? 1000);
+      const target = rootEl || this._contentRoot;
+      if (!target) return;
+
+      target.style.position = p.mode || 'fixed';
+      target.style.zIndex = String(p.z_index ?? 1000);
 
       // reset
-      this._contentRoot.style.top = '';
-      this._contentRoot.style.left = '';
-      this._contentRoot.style.right = '';
-      this._contentRoot.style.bottom = '';
-      this._contentRoot.style.width = '';
-      this._contentRoot.style.height = '';
+      target.style.top = '';
+      target.style.left = '';
+      target.style.right = '';
+      target.style.bottom = '';
+      target.style.width = '';
+      target.style.height = '';
 
-      // Fallback: user hiç konum vermediyse varsayılan ver
+      // Fallback: user hiç konum vermediyse varsayılan ver SETTING: CONTENT_POSITION (sağ üst)
       // IMPORTANT: user bottom/right verirse top/left zorlanmaz (menu ile aynı mantık)
       const hasVertical = (p.top != null) || (p.bottom != null);
       const hasHorizontal = (p.left != null) || (p.right != null);
 
-      if (!hasVertical) this._contentRoot.style.top = '80px';
-      if (!hasHorizontal) this._contentRoot.style.left = '50px';
+      if (!hasVertical) target.style.top = '80px';
+      if (!hasHorizontal) target.style.right = '20px';
 
-      if (p.top != null) this._contentRoot.style.top = toPx(p.top);
-      if (p.left != null) this._contentRoot.style.left = toPx(p.left);
-      if (p.right != null) this._contentRoot.style.right = toPx(p.right);
-      if (p.bottom != null) this._contentRoot.style.bottom = toPx(p.bottom);
+      if (p.top != null) target.style.top = toPx(p.top);
+      if (p.left != null) target.style.left = toPx(p.left);
+      if (p.right != null) target.style.right = toPx(p.right);
+      if (p.bottom != null) target.style.bottom = toPx(p.bottom);
 
-      if (p.width != null) this._contentRoot.style.width = toPx(p.width);
-      if (p.height != null) this._contentRoot.style.height = toPx(p.height);
+      if (p.width != null) target.style.width = toPx(p.width);
+      if (p.height != null) target.style.height = toPx(p.height);
     }
 
-    _showContentLayer() {
-      if (!this._contentRoot) return;
-      this._contentRoot.style.display = 'block';
+    _showContentLayer(rootEl = null) {
+      const mode = this._getPortalMode();
+      if (mode !== 'local' && !this._isGateOwner()) return;
+
+      const target = rootEl || this._contentRoot;
+      if (!target) return;
+
+      target.style.display = 'block';
+      target.style.pointerEvents = 'auto';
     }
 
-    _hideContentLayer() {
-      if (!this._contentRoot) return;
-      // IMPORTANT: display:none => 3D tıklamaları engellenmez
-      this._contentRoot.style.display = 'none';
+    _hideContentLayer(rootEl = null) {
+      const mode = this._getPortalMode();
+      if (mode !== 'local' && !this._isGateOwner()) return;
+
+      const target = rootEl || this._contentRoot;
+      if (!target) return;
+
+      // IMPORTANT: display:none => alttaki UI tıklamaları engellenmez
+      // EXTRA SAFETY: DOM asılı kalsa bile click-block olmasın
+      target.style.display = 'none';
+      target.style.pointerEvents = 'none';
     }
 
     _clearHash() {
       try {
-        const url = window.location.pathname + window.location.search;
-        history.replaceState(null, '', url);
-        window.dispatchEvent(new HashChangeEvent('hashchange'));
+        // Deterministic: trigger real hashchange so _checkHash can close content
+        if (window.location.hash) {
+          window.location.hash = '';
+        }
       } catch (e) {
         // fallback
         window.location.hash = '';
       }
+    }
+    // --------------------------------------------------------------------------
+    // MULTI POPUP: Toggle embedder without hash
+    // --------------------------------------------------------------------------
+
+    async _toggleEmbedderMulti(embedId) {
+      // IMPORTANT: roots must exist before DOM ops
+      this._ensureLayerRoots();
+
+      const id = String(embedId || '').padStart(3, '0');
+      const root = this._getOrCreateContentRootFor(id);
+      if (!root) return;
+
+      if (!this._openSet) this._openSet = new Set();
+
+      // CLOSE
+      if (this._openSet.has(id)) {
+        this._hideContentLayer(root);
+        this._openSet.delete(id);
+        return;
+      }
+
+      // OPEN (stabilize: allow close even if open fails)
+      // - mark as open BEFORE attempting load (so next toggle can close)
+      // - do NOT clear/alter other open states
+      this._openSet.add(id);
+      this._showContentLayer(root);
+
+      await this._openEmbedderById(id, { fromHash: false, targetRoot: root, multi: true });
+
+      this._lastOpened = id;
     }
 
     _toggleHash(embedId) {
@@ -627,6 +844,10 @@ class overlayprocard extends HTMLElement {
     _renderMenu() {
       if (!this._menuRoot) return;
 
+      // ENGINE RULE (global): only owner can render menu
+      const mode = this._getPortalMode();
+      if (mode !== 'local' && !this._isGateOwner()) return;
+
       // Menü kapalıysa bile root durur; sadece görünüm yönetimi
       const enabled = !!(this._config.menu && this._config.menu.enabled);
       if (!enabled) {
@@ -634,8 +855,40 @@ class overlayprocard extends HTMLElement {
         return;
       }
 
+      // ENGINE DEDUPE: same config => do not rebuild menu DOM (blink fix)
+      const _menuCfg = this._config.menu || {};
+      const _posCfg = _menuCfg.position || {};
+      const _btnCfg = Array.isArray(_menuCfg.buttons) ? _menuCfg.buttons : [];
+
+      const renderKey = JSON.stringify({
+        portal_mode: this._getPortalMode(),
+        enabled: !!_menuCfg.enabled,
+        position: {
+          mode: _posCfg.mode,
+          top: _posCfg.top,
+          left: _posCfg.left,
+          right: _posCfg.right,
+          bottom: _posCfg.bottom,
+          z_index: _posCfg.z_index
+        },
+        button_style: _menuCfg.button_style || null,
+        buttons: _btnCfg.map((b) => ({
+          label: b.label,
+          icon: b.icon,
+          target: b.target || b.embed_id
+        }))
+      });
+
+      if (this._menuRenderKey === renderKey && this._menuRoot.children.length > 0) {
+        this._menuRoot.style.display = 'block';
+        return;
+      }
+
+      this._menuRenderKey = renderKey;
+
       this._menuRoot.style.display = 'block';
       this._menuRoot.innerHTML = '';
+
       // ------------------------------------------------------------------------
       // SETTING: MENU_CONTAINER_STYLE
       // Controls: wrapper background, padding, gap, border-radius, shadow
@@ -706,10 +959,19 @@ class overlayprocard extends HTMLElement {
         const labelSpan = document.createElement('span');
         labelSpan.textContent = b.label || target;
         btn.appendChild(labelSpan);
+          // DETERMINISTIC ENGINE BACKBONE:
+          // Click => ONLY hash change
+          // Open/Close => ONLY _checkHash() via hashchange / state sync
+          btn.addEventListener('click', () => {
+            const id = String(target).padStart(3, '0');
 
-        btn.addEventListener('click', () => {
-          this._toggleHash(String(target).padStart(3, '0'));
-        });
+            if (this._config && this._config.multi_mode === true) {
+              this._toggleEmbedderMulti(id);
+            } else {
+              this._toggleHash(id);
+            }
+          });
+
 
         wrap.appendChild(btn);
       });
@@ -717,6 +979,50 @@ class overlayprocard extends HTMLElement {
       this._menuRoot.appendChild(wrap);
     }
   
+    // --------------------------------------------------------------------------
+    // ERROR UI (Deterministic backbone) - single template
+    // --------------------------------------------------------------------------
+    _renderError(targetRoot, error, active = null) {
+      try {
+        if (!targetRoot) return;
+
+        const embedId = String(
+          (active && active.embed_id)
+            ? active.embed_id
+            : (this._config && this._config.embed_id)
+              ? this._config.embed_id
+              : ''
+        ).padStart(3, '0');
+
+        const dashboard = (active && active.dashboard)
+          ? String(active.dashboard)
+          : (this._config && this._config.dashboard)
+            ? String(this._config.dashboard)
+            : '';
+
+        const msg = (error && error.message) ? String(error.message) : String(error || 'Unknown error');
+
+        targetRoot.innerHTML = `
+          <div style="color: var(--error-color); padding: 20px; text-align: center;">
+            <div style="font-size: 1.2em; margin-bottom: 10px;">
+              🔍 Embedding Failed
+            </div>
+            <div style="margin-bottom: 15px;">
+              ${msg}
+            </div>
+            <div style="font-size: 0.9em; color: var(--secondary-text-color);">
+              <strong>Troubleshooting tips:</strong><br>
+              1. Add <code>icon: EMBED#${embedId}</code> to your source card<br>
+              2. Verify dashboard name: "${dashboard}"<br>
+              3. Ensure embed_id is unique (001-999)
+            </div>
+          </div>
+        `;
+      } catch (e) {
+        // fail-safe (do nothing)
+      }
+    }
+
     // --------------------------------------------------------------------------
     // Main Loading Function - optimized performance
     // --------------------------------------------------------------------------
@@ -750,34 +1056,18 @@ class overlayprocard extends HTMLElement {
       this.innerHTML = '';
       this._ensureLayerRoots();
 
-      // Loading indicator goes to content layer only
-      this._showContentLayer();
-      const initIdRaw =
-        (this._config && this._config.embed_id != null)
-          ? String(this._config.embed_id).padStart(3, '0')
-          : null;
-
-      const initIcon = initIdRaw ? `EMBED#${initIdRaw}` : null;
-
-      this._contentRoot.innerHTML = `
-        <div style="padding: 20px; text-align: center; color: var(--primary-color);">
-          <div style="font-style: italic; margin-bottom: 10px;">
-            Overlay Pro Card initializing...
-          </div>
-          <div style="font-size: 0.9em; color: var(--secondary-text-color);">
-            ${initIcon
-              ? `Searching for source card (icon): <strong>${initIcon}</strong>`
-              : `Waiting for menu selection...`
-            }
-          </div>
-          ${initIcon ? `
-          <div style="margin-top: 10px; font-size: 0.85em; color: var(--secondary-text-color);">
-            If not found, add to your source card:<br>
-            <code>icon: ${initIcon}</code>
-          </div>
-          ` : ``}
-        </div>
-      `;
+      // LOADING HTML REMOVED (deterministic backbone)
+      // SINGLE: start hidden unless default_visible (hash can still open later)
+      // MULTI : start hidden (per-root will be shown on toggle)
+      if (this._config && this._config.multi_mode === true) {
+        this._hideContentLayer();
+      } else {
+        if (this._config && this._config.default_visible) {
+          this._showContentLayer();
+        } else {
+          this._hideContentLayer();
+        }
+      }
 
   
       try {
@@ -814,7 +1104,7 @@ class overlayprocard extends HTMLElement {
 
         // Legacy single-embed behavior
         const cardConfig = await this._findCardByEmbedId(this._config.dashboard, this._config.embed_id, this._config.show_title);
-        await this._createCardContent(cardConfig);
+        await this._createCardContent(cardConfig, this._contentRoot);
 
         // default visibility now only affects CONTENT layer (menu stays visible)
         if (this._config.default_visible) {
@@ -824,26 +1114,14 @@ class overlayprocard extends HTMLElement {
         }
         
       } catch (error) {
-        // User-friendly error messages (content layer only; menu remains)
+        // ERROR always visible in UI (even if overlay_log off)
+        // ALSO: preserve log flow (overlay_log + console.error)
+        this._warn('❌ Overlay Pro Card: _loadCard() failed (UI error shown).', error);
+        this._error('❌ Overlay Pro Card: _loadCard() failed.', error);
+
         this._ensureLayerRoots();
         this._showContentLayer();
-
-        this._contentRoot.innerHTML = `
-          <div style="color: var(--error-color); padding: 20px; text-align: center;">
-            <div style="font-size: 1.2em; margin-bottom: 10px;">
-              🔍 Embedding Failed
-            </div>
-            <div style="margin-bottom: 15px;">
-              ${error.message}
-            </div>
-            <div style="font-size: 0.9em; color: var(--secondary-text-color);">
-              <strong>Troubleshooting tips:</strong><br>
-              1. Add <code>icon: EMBED#${(this._activeEmbedId || this._config.embed_id || '001')}</code> to your source card<br>
-              2. Verify dashboard name: "${((this._getActiveEmbedderSettings && this._getActiveEmbedderSettings()) ? (this._getActiveEmbedderSettings().dashboard || this._config.dashboard) : (this._config.dashboard))}"<br>
-              3. Ensure embed_id is unique (001-999)
-            </div>
-          </div>
-        `;
+        this._renderError(this._contentRoot, error, this._getActiveEmbedderSettings());
       }
     }
     // --------------------------------------------------------------------------
@@ -901,11 +1179,22 @@ class overlayprocard extends HTMLElement {
       return d ? String(d.embed_id) : null;
     }
 
-    async _openEmbedderById(embedId, { fromHash = false } = {}) {
+    async _openEmbedderById(embedId, { fromHash = false, targetRoot = null, multi = false } = {}) {
       const active = this._getActiveEmbedderSettings(embedId);
       if (!active) {
         this._warn(`⚠️ Overlay Pro Card: embedder not defined for ${embedId}`);
-        this._hideContentLayer();
+
+        this._ensureLayerRoots();
+
+        const root = (multi === true)
+          ? (targetRoot || this._getOrCreateContentRootFor(String(embedId || '').padStart(3, '0')))
+          : this._contentRoot;
+
+        if (root) {
+          this._showContentLayer(root);
+          this._renderError(root, new Error(`Embedder not defined for ${String(embedId || '').padStart(3, '0')}`), null);
+        }
+
         return;
       }
 
@@ -916,35 +1205,39 @@ class overlayprocard extends HTMLElement {
       this._ensureLayerRoots();
 
       // Apply positioning for this embedder
-      this._applyContentPositioning(active);
+      const root = (multi === true)
+        ? (targetRoot || this._getOrCreateContentRootFor(active.embed_id))
+        : this._contentRoot;
 
-      // Show loading + render embedded source card
-      this._showContentLayer();
-      const initId = String(active.embed_id || '').padStart(3, '0');
-      const initIcon = `EMBED#${initId}`;
+      if (!root) return;
 
-      this._contentRoot.innerHTML = `
-        <div style="padding: 20px; text-align: center; color: var(--primary-color);">
-          <div style="font-style: italic; margin-bottom: 10px;">
-            Overlay Pro Card initializing...
-          </div>
+      this._applyContentPositioning(active, root);
+      this._showContentLayer(root);
 
-          <div style="font-size: 0.9em; color: var(--secondary-text-color);">
-            Searching for source card (icon): <strong>${initIcon}</strong>
-          </div>
+      // LOADING HTML REMOVED (deterministic backbone)
+      try {
+        const cardConfig = await this._findCardByEmbedId(active.dashboard, active.embed_id, active.show_title);
+        await this._createCardContent(cardConfig, root, { multi: !!multi, embedId: String(active.embed_id).padStart(3, '0') });
+      } catch (err) {
+        // Deterministic ERROR UI (both multi & single)
+        // - Multi: do NOT throw
+        // - Single: also show error UI in the same target root (content layer),
+        //           so user always sees the failure even if logs are off.
 
-          <div style="margin-top: 10px; font-size: 0.85em; color: var(--secondary-text-color);">
-            If not found, add to your source card:<br>
-            <code>icon: ${initIcon}</code>
-          </div>
-        </div>
-      `;
+        // Preserve log flow (overlay_log + console.error)
+        const eid = (active && active.embed_id) ? String(active.embed_id).padStart(3, '0') : String(embedId || '').padStart(3, '0');
+        this._warn(`❌ Overlay Pro Card: open failed for embed_id:${eid} (UI error shown).`, err);
+        this._error(`❌ Overlay Pro Card: open failed for embed_id:${eid}.`, err);
 
-      const cardConfig = await this._findCardByEmbedId(active.dashboard, active.embed_id, active.show_title);
-      await this._createCardContent(cardConfig);
+        this._showContentLayer(root);
+        this._renderError(root, err, active);
+        return;
+      }
 
       // Multi-embed coordination (other instances)
-      this._closeOtherEmbedders();
+      if (!multi) {
+        this._closeOtherEmbedders();
+      }
 
       // If opened not by hash (default_visible), do NOT force hash
       if (!fromHash) {
@@ -961,50 +1254,122 @@ class overlayprocard extends HTMLElement {
     // --------------------------------------------------------------------------
 
     _setupHashControl() {
-      // Hash değişimini dinle (LEAK FIX: bind once)
+      // MULTI: hash OFF (state openSet ile yönetilir)
+      if (this._config && this._config.multi_mode === true) return;
+
+      const mode = this._getPortalMode();
+
+      // Ensure roots/gate are initialized
+      this._registerGateInstance();
+      this._electOwnerIfNeeded();
+
+      // GLOBAL: single hash listener, handled by current owner only
+      if (mode !== 'local') {
+        const gate = this._getGate();
+
+        if (!gate.hashListener) {
+          gate.hashListener = () => {
+            try {
+              // Owner may change; always re-elect
+              const owner = this._electOwnerIfNeeded();
+              if (owner && typeof owner._checkHash === 'function') {
+                owner._checkHash();
+              }
+            } catch (e) {}
+          };
+          window.addEventListener('hashchange', gate.hashListener);
+        }
+
+        // Non-owner should not run initial checks (prevents duplicate opens/logs)
+        if (!this._isGateOwner()) return;
+
+        if (this._hashControlInitDone) return;
+        this._hashControlInitDone = true;
+
+        setTimeout(() => this._checkHash(), 100);
+        return;
+      }
+
+      // LOCAL: per-instance listener (original behavior)
       if (!this._boundHashChanged) {
         this._boundHashChanged = () => this._checkHash();
         window.addEventListener('hashchange', this._boundHashChanged);
       }
 
-      // FIX: setConfig/_loadCard tekrar çağrılsa bile ilk kontrolü flood etme
       if (this._hashControlInitDone) return;
       this._hashControlInitDone = true;
 
-      // İlk yüklemede kontrol et
       setTimeout(() => this._checkHash(), 100);
     }
     
     _checkHash() {
-      const hash = window.location.hash; // Örnek: #embed_001
-      // FIX: Duplicate hash processing guard (prevents double logs on first click / refresh)
-      // Some flows can call _checkHash twice in quick succession (hashchange + visibility guard / init timer).
-      if (this._lastHandledHash === hash && (Date.now() - (this._lastHandledHashAt || 0)) < 250) {
-        return;
-      }
-      this._lastHandledHash = hash;
-      this._lastHandledHashAt = Date.now();
+      // MULTI: hash OFF
+      if (this._config && this._config.multi_mode === true) return;
 
-      // FIX: Menu'yu her hash değişiminde re-render etme (blink/flash fix)
-      // Sadece root'lar yoksa oluştur.
+      const mode = this._getPortalMode();
+
+      // GLOBAL: only OWNER reacts to hash (prevents 2-3x log sets)
+      if (mode !== 'local' && !this._isGateOwner()) return;
+
+      const hash = window.location.hash; // Örnek: #embed_001
+
+      // Ensure roots exist (owner creates/renders in global)
       if (!this._menuRoot || !this._contentRoot || !this._portalRoot) {
         this._ensureLayerRoots();
       }
 
-      // Legacy menu_only ONLY means "no legacy single embed" (but embedders[] can still work)
       const hasList = this._hasEmbeddersList();
 
       // Parse hash pattern
       const m = /^#embed_(\d{3})$/.exec(hash || '');
       const hashId = m ? m[1] : null;
 
+      // Helper: visible check (idempotency)
+      const isContentVisible = () => {
+        try {
+          if (!this._contentRoot) return false;
+          const d = this._contentRoot.style.display;
+          return d && d !== 'none';
+        } catch (e) { return false; }
+      };
+
       // If we have embedders list => open matching embedder from list
       if (hasList) {
-        if (hashId && this._getEmbedderDef(hashId)) { 
+        if (hashId && this._getEmbedderDef(hashId)) {
+          // Idempotent: same active + already visible => do nothing (no blink, no duplicate logs)
+          if (this._activeEmbedId === hashId && isContentVisible()) return;
+
+          // DETERMINISTIC GUARD:
+          // _checkHash can be triggered twice (hashchange + portalActive/view flows).
+          // Prevent starting the same open flow twice.
+          if (this._pendingHashOpenId === hashId) {
+            return;
+          }
+          this._pendingHashOpenId = hashId;
+
           this._log(`✅ Overlay Pro Card: Hash matched (list)! Opening embedder ${hashId}`);
-          this._openEmbedderById(hashId, { fromHash: true });
+
+          try {
+            const p = this._openEmbedderById(hashId, { fromHash: true });
+            if (p && typeof p.finally === 'function') {
+              p.finally(() => {
+                if (this._pendingHashOpenId === hashId) {
+                  this._pendingHashOpenId = null;
+                }
+              });
+            } else {
+              // If not a promise, clear immediately
+              if (this._pendingHashOpenId === hashId) {
+                this._pendingHashOpenId = null;
+              }
+            }
+          } catch (e) {
+            if (this._pendingHashOpenId === hashId) {
+              this._pendingHashOpenId = null;
+            }
+          }
         } else {
-          // No match => hide
+          this._pendingHashOpenId = null;
           this._activeEmbedId = null;
           this._hideContentLayer();
         }
@@ -1021,6 +1386,9 @@ class overlayprocard extends HTMLElement {
       this._log(`🔗 Overlay Pro Card: Hash check - Current: "${hash}", My hash: "${myHash}"`);
 
       if (hash === myHash) {
+        // Idempotent: already visible => no duplicate logs/flash
+        if (isContentVisible()) return;
+
         this._log(`✅ Overlay Pro Card: Hash matched! Opening embedder ${this._config.embed_id}`);
         this._showContentLayer();
         this._closeOtherEmbedders();
@@ -1154,7 +1522,7 @@ class overlayprocard extends HTMLElement {
     // --------------------------------------------------------------------------
     // Card Content Creation - optimized rendering
     // --------------------------------------------------------------------------
-    async _createCardContent(cardConfig) {
+    async _createCardContent(cardConfig, rootEl = null, meta = null) {
       const helpers = await window.loadCardHelpers();
       
       // Create card element
@@ -1166,7 +1534,9 @@ class overlayprocard extends HTMLElement {
       this._ensureLayerRoots();
 
       // Clean content layer only (menu stays)
-      this._contentRoot.innerHTML = '';
+      const targetRoot = rootEl || this._contentRoot;
+      if (!targetRoot) return;
+      targetRoot.innerHTML = '';
 
       const container = document.createElement('div');
       container.className = 'overlaypro-card-container';
@@ -1186,7 +1556,8 @@ class overlayprocard extends HTMLElement {
       cardWrapper.style.background = 'none';
       cardWrapper.style.boxShadow = 'none';
       
-      const active = this._getActiveEmbedderSettings();
+      const embedId = (meta && meta.embedId) ? String(meta.embedId).padStart(3, '0') : null;
+      const active = embedId ? this._getActiveEmbedderSettings(embedId) : this._getActiveEmbedderSettings();
       // HA Header - Sadece embedder_title veya show_close varsa
       if ((active && active.embedder_title) || (active && active.show_close)) {
         const header = document.createElement('div');
@@ -1244,6 +1615,17 @@ class overlayprocard extends HTMLElement {
           
           // Kapatma fonksiyonu
           closeButton.addEventListener('click', () => {
+            const isMulti = !!(this._config && this._config.multi_mode === true);
+            const id = (active && active.embed_id) ? String(active.embed_id).padStart(3, '0') : null;
+
+            if (isMulti) {
+              // multi: close ONLY this root
+              this._hideContentLayer(targetRoot);
+              if (id && this._openSet) this._openSet.delete(id);
+              return;
+            }
+
+            // single: legacy
             this._hideContentLayer();
             this._clearHash();
             this._log(`❌ Overlay Pro Card: Closed via X button - embed_id: ${(active && active.embed_id) ? active.embed_id : '???'}`);
@@ -1291,7 +1673,7 @@ class overlayprocard extends HTMLElement {
       cardContent.appendChild(this._contentElement);
       cardWrapper.appendChild(cardContent);
       container.appendChild(cardWrapper);
-      this._contentRoot.appendChild(container);
+      targetRoot.appendChild(container);
       
       // Finalization
       this._loaded = true;
@@ -1341,38 +1723,73 @@ class overlayprocard extends HTMLElement {
     // Lifecycle: Cleanup (FIXED - was broken by copy/paste)
     // --------------------------------------------------------------------------
     disconnectedCallback() {
-      // SETTING: VIEW_VISIBILITY_GUARD
       this._teardownViewVisibilityGuard();
 
-      // FIX: Hash control listener cleanup
+      const mode = this._getPortalMode();
+
+      // LOCAL: cleanup per-instance (original)
+      if (mode === 'local') {
+        try {
+          if (this._boundHashChanged) {
+            window.removeEventListener('hashchange', this._boundHashChanged);
+            this._boundHashChanged = null;
+          }
+          this._hashControlInitDone = false;
+        } catch (e) {}
+
+        try {
+          if (this._menuRoot && this._menuRoot.parentNode) {
+            this._menuRoot.parentNode.removeChild(this._menuRoot);
+          }
+          if (this._contentRoot && this._contentRoot.parentNode) {
+            this._contentRoot.parentNode.removeChild(this._contentRoot);
+          }
+          if (this._portalRoot && this._portalRoot.parentNode) {
+            this._portalRoot.parentNode.removeChild(this._portalRoot);
+          }
+        } catch (e) {}
+
+        this._portalRoot = null;
+        this._menuRoot = null;
+        this._contentRoot = null;
+        return;
+      }
+
+      // GLOBAL: shared roots + shared hash listener (cleanup only when refCount hits 0)
       try {
-        if (this._boundHashChanged) {
-          window.removeEventListener('hashchange', this._boundHashChanged);
-          this._boundHashChanged = null;
-        }
+        this._unregisterGateInstance();
+        const gate = this._getGate();
         this._hashControlInitDone = false;
+
+        if (gate.refCount === 0) {
+          // remove global hash listener
+          try {
+            if (gate.hashListener) {
+              window.removeEventListener('hashchange', gate.hashListener);
+              gate.hashListener = null;
+            }
+          } catch (e) {}
+
+          // remove shared roots
+          try {
+            if (gate.roots) {
+              const { menuRoot, contentRoot, portalRoot } = gate.roots;
+
+              if (menuRoot && menuRoot.parentNode) menuRoot.parentNode.removeChild(menuRoot);
+              if (contentRoot && contentRoot.parentNode) contentRoot.parentNode.removeChild(contentRoot);
+              if (portalRoot && portalRoot.parentNode) portalRoot.parentNode.removeChild(portalRoot);
+            }
+          } catch (e) {}
+
+          gate.roots = null;
+          gate.owner = null;
+        }
       } catch (e) {}
 
-      // Portal cleanup (menu/content kaldır)
-      try {
-        if (this._menuRoot && this._menuRoot.parentNode) {
-          this._menuRoot.parentNode.removeChild(this._menuRoot);
-        }
-        if (this._contentRoot && this._contentRoot.parentNode) {
-          this._contentRoot.parentNode.removeChild(this._contentRoot);
-        }
-        if (this._portalRoot && this._portalRoot.parentNode) {
-          this._portalRoot.parentNode.removeChild(this._portalRoot);
-        }
-      } catch (e) {}
-
+      // Detach references (do not remove DOM unless refCount==0)
       this._portalRoot = null;
       this._menuRoot = null;
       this._contentRoot = null;
-      // FIX: reset hash dedupe state
-      this._lastHandledHash = null;
-      this._lastHandledHashAt = 0;
-
     }
     
     toggle() {
@@ -1394,7 +1811,7 @@ class overlayprocard extends HTMLElement {
 // ============================================================================
 
 const overlayTitle = '  OVERLAY[PRO]-CARD ';
-const overlayVersion = '  Version Faz.1    ';
+const overlayVersion = '  Version Faz.1.1    ';
 
 // Longest line width
 const overlayWidth = Math.max(overlayTitle.length, overlayVersion.length);
