@@ -191,7 +191,7 @@ you now define everything inside one Overlay Pro Card card:
 
 Menu buttons
 
-Popup definitions (embedders[])
+Popup definitions (embedders["])
 
 Positioning per popup
 
@@ -426,7 +426,7 @@ Found a bug?
 
 Open an issue on GitHub:
 
-https://github.com/levonisyas/overlaypro-card
+<https://github.com/levonisyas/overlaypro-card>
 
 ## 🚨 ERROR CONDITIONS:
 No embed_id: "Overlay Pro Card requires both embed_id AND dashboard parameters"
