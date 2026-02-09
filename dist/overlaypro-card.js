@@ -127,14 +127,53 @@ class overlayprocard extends HTMLElement {
       if (gate.owner && (!gate.owner.isConnected)) {
         gate.owner = null;
       }
+
       if (!gate.owner) {
-        for (const inst of gate.instances) {
-          if (inst && inst.isConnected) {
-            gate.owner = inst;
-            break;
+        // Prefer choosing owner based on current hash target (legacy single + list mode)
+        let hashId = null;
+        try {
+          const raw = String(window.location.hash || '');
+          const m = /^#embed_(\d{3})$/.exec(raw);
+          hashId = m ? m[1] : null;
+        } catch (e) {}
+
+        if (hashId) {
+          for (const inst of gate.instances) {
+            if (!inst || !inst.isConnected) continue;
+            if (!inst._config) continue;
+
+            // embedders[] list mode: pick the instance that owns the hash target
+            try {
+              if (typeof inst._hasEmbeddersList === 'function' && inst._hasEmbeddersList()) {
+                if (typeof inst._getEmbedderDef === 'function' && inst._getEmbedderDef(hashId)) {
+                  gate.owner = inst;
+                  break;
+                }
+              }
+            } catch (e) {}
+
+            // legacy single mode: pick matching embed_id
+            try {
+              const eid = (inst._config && inst._config.embed_id != null) ? String(inst._config.embed_id).padStart(3, '0') : null;
+              if (eid && eid === hashId) {
+                gate.owner = inst;
+                break;
+              }
+            } catch (e) {}
+          }
+        }
+
+        // Fallback: first connected instance
+        if (!gate.owner) {
+          for (const inst of gate.instances) {
+            if (inst && inst.isConnected) {
+              gate.owner = inst;
+              break;
+            }
           }
         }
       }
+
       return gate.owner;
     }
 
@@ -349,6 +388,8 @@ class overlayprocard extends HTMLElement {
       this._openSet = new Set();          // open embed list
       this._cardCache = new Map();        // embed_id -> card element
       this._lastOpened = null;
+      // ENGINE PATCH: BACKBONE_UNIFY_V1
+      this._pendingSingleRewrite = null;
 
       // ENGINE: menu render dedupe state (prevents blink)
       this._menuRenderKey = null;
@@ -801,6 +842,36 @@ class overlayprocard extends HTMLElement {
       }
     }
     // --------------------------------------------------------------------------
+    // MULTI HASH HELPERS
+    // Format: #embed_001,002,005
+    // --------------------------------------------------------------------------
+    _parseMultiHash() {
+      const raw = String(window.location.hash || '');
+      const m = /^#embed_(.+)$/.exec(raw);
+      if (!m || !m[1]) return [];
+      return m[1]
+        .split(',')
+        .map(v => v.trim())
+        .filter(v => /^\d{3}$/.test(v));
+    }
+
+    _writeMultiHash(ids) {
+      const uniq = [];
+      for (const id of ids) {
+        const v = String(id).padStart(3, '0');
+        if (!uniq.includes(v)) uniq.push(v);
+      }
+      if (uniq.length === 0) {
+        this._clearHash();
+        return;
+      }
+      const next = `#embed_${uniq.join(',')}`;
+      if (window.location.hash !== next) {
+        window.location.hash = next;
+      }
+    }
+
+    // --------------------------------------------------------------------------
     // MULTI POPUP: Toggle embedder without hash
     // --------------------------------------------------------------------------
 
@@ -966,7 +1037,12 @@ class overlayprocard extends HTMLElement {
             const id = String(target).padStart(3, '0');
 
             if (this._config && this._config.multi_mode === true) {
-              this._toggleEmbedderMulti(id);
+              const current = this._parseMultiHash();
+              const has = current.includes(id);
+              const next = has
+                ? current.filter(x => x !== id)
+                : current.concat(id);
+              this._writeMultiHash(next);
             } else {
               this._toggleHash(id);
             }
@@ -1254,8 +1330,7 @@ class overlayprocard extends HTMLElement {
     // --------------------------------------------------------------------------
 
     _setupHashControl() {
-      // MULTI: hash OFF (state openSet ile yönetilir)
-      if (this._config && this._config.multi_mode === true) return;
+      // MULTI: hash ON (tek omurga = hash)
 
       const mode = this._getPortalMode();
 
@@ -1303,8 +1378,7 @@ class overlayprocard extends HTMLElement {
     }
     
     _checkHash() {
-      // MULTI: hash OFF
-      if (this._config && this._config.multi_mode === true) return;
+      // MULTI: hash ON (state hash ile senkron)
 
       const mode = this._getPortalMode();
 
@@ -1312,6 +1386,100 @@ class overlayprocard extends HTMLElement {
       if (mode !== 'local' && !this._isGateOwner()) return;
 
       const hash = window.location.hash; // Örnek: #embed_001
+      if (this._config) {
+        // ENGINE PATCH: BACKBONE_UNIFY_V1
+        // Use Set/List reconciliation backbone for BOTH modes.
+        // - multi_mode:true  => allow multiple ids
+        // - multi_mode:false => capacity=1 (normalize to single hash)
+        this._ensureLayerRoots();
+
+        const hasList = (typeof this._hasEmbeddersList === 'function') ? this._hasEmbeddersList() : false;
+
+        // menu_only legacy: do not open content
+        if (this._config.menu_only === true && !hasList) {
+          this._hideContentLayer();
+          return;
+        }
+
+        // Latch: if we rewrote the hash to single form, clear when reached
+        if (this._pendingSingleRewrite && hash === this._pendingSingleRewrite) {
+          this._pendingSingleRewrite = null;
+        }
+
+        // Accept both "#embed_001" and "#embed_001,003"
+        let wantRaw = this._parseMultiHash();
+
+        // Legacy single-embed: only honor our own embed_id
+        if (!hasList) {
+          const myId = (this._config && this._config.embed_id != null) ? String(this._config.embed_id).padStart(3, '0') : '';
+          wantRaw = wantRaw.filter(x => x === myId);
+        }
+
+        const capacityOne = !(this._config && this._config.multi_mode === true);
+
+        // In capacity-1 mode, normalize multi hash to single hash (keep last id deterministically)
+        if (capacityOne && wantRaw.length > 1) {
+          const keep = wantRaw[wantRaw.length - 1];
+          const singleHash = `#embed_${keep}`;
+          if (hash !== singleHash && this._pendingSingleRewrite !== singleHash) {
+            this._pendingSingleRewrite = singleHash;
+            window.location.hash = singleHash;
+            return;
+          }
+          wantRaw = [keep];
+        }
+
+        const want = wantRaw;
+        const wantSet = new Set(want);
+
+        if (!this._openSet) this._openSet = new Set();
+
+        // CLOSE: open but not in hash
+        for (const openId of Array.from(this._openSet)) {
+          if (!wantSet.has(openId)) {
+            if (hasList) {
+              const r = this._contentRoots && this._contentRoots.get(openId);
+              if (r) this._hideContentLayer(r); // CLICK-BLOCK SAFE
+            } else {
+              this._hideContentLayer();
+            }
+            this._openSet.delete(openId);
+          }
+        }
+
+        // OPEN: in hash but not open
+        for (const id of want) {
+          if (this._openSet.has(id)) {
+            if (hasList) {
+              const r = this._contentRoots && this._contentRoots.get(id);
+              if (r) this._showContentLayer(r);
+            } else {
+              this._showContentLayer();
+            }
+            continue;
+          }
+
+          if (hasList) {
+            const root = this._getOrCreateContentRootFor(id);
+            if (!root) continue;
+
+            this._openSet.add(id);
+            this._showContentLayer(root);
+            this._openEmbedderById(id, {
+              fromHash: true,
+              targetRoot: root,
+              multi: true
+            });
+          } else {
+            // Legacy single: use the existing content root
+            this._openSet.add(id);
+            this._showContentLayer();
+            this._openEmbedderById(id, { fromHash: true });
+          }
+        }
+
+        return;
+      }
 
       // Ensure roots exist (owner creates/renders in global)
       if (!this._menuRoot || !this._contentRoot || !this._portalRoot) {
@@ -1619,9 +1787,9 @@ class overlayprocard extends HTMLElement {
             const id = (active && active.embed_id) ? String(active.embed_id).padStart(3, '0') : null;
 
             if (isMulti) {
-              // multi: close ONLY this root
-              this._hideContentLayer(targetRoot);
-              if (id && this._openSet) this._openSet.delete(id);
+              const current = this._parseMultiHash();
+              const next = current.filter(x => x !== id);
+              this._writeMultiHash(next);
               return;
             }
 
@@ -1811,7 +1979,7 @@ class overlayprocard extends HTMLElement {
 // ============================================================================
 
 const overlayTitle = '  OVERLAY[PRO]-CARD ';
-const overlayVersion = '  Version Faz.1.1    ';
+const overlayVersion = '  Version Faz.2    ';
 
 // Longest line width
 const overlayWidth = Math.max(overlayTitle.length, overlayVersion.length);

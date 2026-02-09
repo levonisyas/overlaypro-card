@@ -93,7 +93,7 @@ resources:
 
 ### Notes
 
-* No custom repository setup is required anymore, since Overlay Pro is now included in the official **HACS Default Repository Store**.  
+* No custom repository setup is required, Overlay Pro is in the official **HACS Default Repository Store**.  
 * Manual installation is only recommended for advanced or offline setups.  
 
 ---
@@ -203,7 +203,7 @@ Positioning per popup
 type: custom:overlaypro-card
 portal_mode: global / local  # OPTIONAL: global MODE Mounts UI layers into document.body. // local MODE Mounts overlay layers inside the card itself
 multi_mode: true / false     # OPTIONAL: Enables multi-popup mode (multiple embedders can be open at the same time). When true, URL hash is disabled.
-                             # NOTE: After a browser refresh / page reload, all open popups will be closed (open state is not persisted).
+                             # NOTE: Open popups are restored after a browser refresh / page reload as long as the URL hash is present
 overlay_log: true / false
 # ----------------------------
 # MENU SETTINGS (OPTIONAL)
@@ -318,14 +318,14 @@ Only one embedder can be open at a time.
 multi_mode: false
 ```
 
-#### `multi_mode: true` (Multi Popup Engine)
+#### `multi_mode: true` (Multi Popup Engine)  
 
 Multi-popup mode:
 Multiple embedders can be open at the same time.
 
-* URL hash is disabled (state is managed internally)
+* URL hash is used for deterministic state management (`#embed_001,003`)
 * Each `embed_id` gets its own isolated popup root
-* **After a browser refresh / page reload, all open popups will be closed** (open state is not persisted)
+* **Open popups are restored after a browser refresh / page reload as long as the URL hash is present**
 
 ```yaml
 multi_mode: true
