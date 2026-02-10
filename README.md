@@ -1,8 +1,8 @@
 # Overlay Pro Card — Engine Powering Overlay Popup UI Layers
 
-[![HACS Default](https://raw.githubusercontent.com/levonisyas/overlaypro-card/main/badges/hacs-default.svg)](https://hacs.xyz/) [![License](https://raw.githubusercontent.com/levonisyas/overlaypro-card/main/badges/license.svg)](LICENSE) [![Latest Release](https://img.shields.io/github/v/release/levonisyas/overlaypro-card)](https://github.com/levonisyas/overlaypro-card/releases)  
+![HACS Default](https://img.shields.io/badge/HACS-Default-fe7d37.svg?logo=homeassistant&logoColor=white) ![License MIT](https://img.shields.io/badge/License-MIT-97CA00.svg?logo=homeassistant&logoColor=white) ![Version](https://img.shields.io/github/v/release/levonisyas/overlaypro-card.svg?label=OverlayPro%20Card&logo=homeassistant&logoColor=white&color=007ec6) ![Downloads](https://img.shields.io/github/downloads/levonisyas/overlaypro-card/total.svg?label=Downloads&logo=homeassistant&logoColor=white&labelColor=555&color=5cb85c)
 
-<img src="https://raw.githubusercontent.com/levonisyas/overlaypro-card/main/demo/demo.jpg" width="1200" alt="Overlay Pro Card">
+### Your Lovelace Overlay Engine for Home Assistant *(Popup & Portal UI Layer System)*
 
 ---
 
@@ -12,7 +12,11 @@
 
 ---
 
-**Overlay Pro Card is an evolution of the Picture Elements concept:**
+<img src="https://raw.githubusercontent.com/levonisyas/overlaypro-card/main/demo/demo.jpg" width="1200" alt="Overlay Pro Card">
+
+---
+
+## Overlay Pro Card is an evolution of the Picture Elements concept:
 
 - Instead of placing icons or images on top of a dashboard…
 - It places **real Lovelace cards** as floating popup overlays
@@ -22,7 +26,7 @@ This card is designed as the overlay engine for future **Dashboard3D** ecosystem
 
 ---
 
-## ⭐ What is Overlay Pro Card?
+## What is Overlay Pro Card?
 
 Overlay Pro Card provides:
 
@@ -124,7 +128,7 @@ Any Lovelace card can become an embeddable “source card” by adding:
 icon: EMBED#001
 ```
 
-### Universal SOURCE Card Template (Global)
+### Universal SOURCE Card Template (Global/Local)
 
 This can be **any Lovelace card type**:
 
@@ -184,7 +188,7 @@ If these three values match (`EMBED#001` → `target: "001"` → `embed_id: "001
 
 ---
 
-### ⭐ NEW STANDARD  — Single Card Engine  
+### NEW STANDARD  — Single Card Engine  
 
 Instead of creating multiple embedder cards,
 you now define everything inside one Overlay Pro Card card:
@@ -272,7 +276,7 @@ embedders:
 
 ---
 
-### Portal Mode Support (Global vs Local)
+## Portal Mode Support (Global vs Local)
 
 Overlay Pro supports two mounting behaviors:
 
@@ -302,7 +306,7 @@ portal_mode: local
 
 ---
 
-### Multi Mode Support (Single vs Multi Popup)
+## Multi Mode Support (Single vs Multi Popup)
 
 Overlay Pro supports two popup behaviors:
 
