@@ -1,6 +1,6 @@
 # Overlay Pro Card — Engine Powering Overlay Popup UI Layers
 
-![HACS Default](https://img.shields.io/badge/HACS-Default-fe7d37.svg?logo=homeassistant&logoColor=white) ![License MIT](https://img.shields.io/badge/License-MIT-97CA00.svg?logo=homeassistant&logoColor=white) ![Version](https://img.shields.io/github/v/release/levonisyas/overlaypro-card.svg?label=OverlayPro%20Card&logo=homeassistant&logoColor=white&color=007ec6) ![Downloads](https://img.shields.io/github/downloads/levonisyas/overlaypro-card/total.svg?label=Downloads&logo=homeassistant&logoColor=white&labelColor=555&color=5cb85c)
+![HACS Default](https://img.shields.io/badge/HACS-Default-fe7d37.svg?logo=homeassistant&logoColor=white) ![License MIT](https://img.shields.io/badge/License-MIT-97CA00.svg?logo=homeassistant&logoColor=white) ![Version](https://img.shields.io/github/v/release/levonisyas/overlaypro-card?label=Overlay%20Pro%20Card&logo=homeassistant&logoColor=white&color=007ec6&style=flat) ![Downloads](https://img.shields.io/github/downloads/levonisyas/overlaypro-card/total.svg?label=Downloads&logo=homeassistant&logoColor=white&labelColor=555&color=5cb85c)
 
 ### Your Lovelace Overlay Engine for Home Assistant *(Popup & Portal UI Layer System)*
 
@@ -198,6 +198,53 @@ Menu buttons
 Popup definitions (embedders["])
 
 Positioning per popup
+
+---
+
+## Visual Editor (UI Configuration)
+
+Overlay Pro Card now includes a **full-featured Visual Editor**, available directly in the Home Assistant UI.
+
+For the first time, **the entire card can be configured visually** — without writing YAML.
+
+### What the Visual Editor provides
+
+- Full configuration of **Menu**, **Menu Buttons**, and **Embedders**
+- Inline editing using accordion-style panels
+- Automatic ID handling (menu targets & embed IDs)
+- Clean, structured layout matching Home Assistant standards
+- No hidden state or abstraction layers
+
+### 100% YAML Feature Parity
+
+The Visual Editor is **not a limited wrapper**.
+
+Every option available in YAML can be configured through the Visual Editor:
+- Menu positioning
+- Button styling
+- Embedder behavior
+- Popup positioning and sizing
+- Scroll, visibility, titles, and close behavior
+
+The editor writes **real configuration keys only** —  
+no intermediate models, no duplicated fields, no YAML spam.
+
+### Visual Editor and YAML work together
+
+- YAML remains **fully supported**
+- You can freely switch between:
+  - **Visual Editor**
+  - **Raw YAML editor**
+- Changes are always reflected accurately in both views
+
+The Visual Editor is a **first-class configuration method**, not a secondary tool.
+
+### Recommended workflow
+
+- Use the **Visual Editor** for building and adjusting your overlay system
+- Use **Raw YAML** for advanced review, version control, or fine tuning
+
+Both methods operate on the same configuration model.
 
 ---
 

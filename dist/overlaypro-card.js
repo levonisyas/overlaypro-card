@@ -3,23 +3,37 @@
 // ============================================================================
 
 class overlayprocard extends HTMLElement {
+
     // --------------------------------------------------------------------------
     // Lovelace UI: Default YAML (Stub Config)
     // Home Assistant uses this when user adds the card from UI.
     // --------------------------------------------------------------------------
     static getStubConfig() {
       return {
+        // ----------------------------
+        // GENERAL SETTINGS
+        // ----------------------------
         overlay_log: false,
+
         portal_mode: 'global',
+
         multi_mode: false,
+
+        // ----------------------------
+        // MENU SETTINGS (OPTIONAL)
+        // ----------------------------
         menu: {
           enabled: true,
+
           position: {
             mode: 'fixed',
+
             bottom: '15%',
             right: '5%',
+
             z_index: 1100
           },
+
           buttons: [
             {
               label: 'Lights',
@@ -34,20 +48,28 @@ class overlayprocard extends HTMLElement {
           ]
         },
 
+        // ----------------------------
+        // EMBEDDER POPUPS (REQUIRED)
+        // ----------------------------
         embedders: [
           {
             embed_id: '001',
             dashboard: 'dashboard-test',
-            embedder_title: 'Lights',
-            show_close: true,
+
             show_title: true,
-            default_visible: false,
+            show_close: true,
             enable_scroll: true,
+
+            embedder_title: 'Lights',
+            default_visible: false,
+
             content: {
               position: {
                 mode: 'fixed',
+
                 top: '15%',
                 right: '5%',
+
                 width: '300px',
                 height: '350px',
                 z_index: 1000
@@ -57,16 +79,21 @@ class overlayprocard extends HTMLElement {
           {
             embed_id: '002',
             dashboard: 'dashboard-test',
-            embedder_title: 'Climate',
-            show_close: true,
+
             show_title: true,
-            default_visible: false,
+            show_close: true,
             enable_scroll: true,
+
+            embedder_title: 'Climate',
+            default_visible: false,
+
             content: {
               position: {
                 mode: 'fixed',
+
                 top: '35%',
                 right: '15%',
+
                 width: '300px',
                 height: '350px',
                 z_index: 1000
@@ -1979,7 +2006,7 @@ class overlayprocard extends HTMLElement {
 // ============================================================================
 
 const overlayTitle = '  OVERLAY[PRO]-CARD ';
-const overlayVersion = '  Version Faz.2    ';
+const overlayVersion = '  Version Faz.2.5    ';
 
 // Longest line width
 const overlayWidth = Math.max(overlayTitle.length, overlayVersion.length);
@@ -2005,7 +2032,1027 @@ console.info(
       description: 'Engine Powering Overlay Popup UI Layers',
     });
   }
-  
+
+// ============================================================================
+// Overlay Pro Card – Visual Editor (Faz.3) [V2 FIX]
+// - Labels for switches (ha-formfield)
+// - Expansion state preserved (no collapsing on change)
+// - Add / Remove for Menu Buttons + Embedders
+// - Uses ONLY existing schema keys (no menu_position_values etc.)
+// ============================================================================
+
+(() => {
+  const base =
+    window.LitElement ||
+    Object.getPrototypeOf(customElements.get("ha-panel-lovelace")) ||
+    Object.getPrototypeOf(customElements.get("ha-card"));
+
+  const html = base.prototype.html;
+  const css = base.prototype.css;
+
+  const deepClone = (x) => JSON.parse(JSON.stringify(x || {}));
+
+  class OverlayProCardEditor extends base {
+    static get properties() {
+      return {
+        hass: {},
+        _config: { state: true },
+        _ui: { state: true },
+      };
+    }
+
+    setConfig(config) {
+      this._config = deepClone(config);
+
+      // UI state (preserve accordion open/close)
+      // NOTE: _ui is initialized in properties as {state:true}, so it is truthy.
+      // We must always "ensure" keys exist, otherwise first render can open everything.
+      const prev = this._ui || {};
+      const firstBoot = prev._booted !== true;
+
+      // Base defaults (safe + deterministic)
+      this._ui = {
+        general: false,
+        menu: false,
+        menuButtons: false,
+        embedders: false,
+        advanced: false,
+        openMenuBtn: null,
+        openEmbedder: null,
+        _booted: true,
+        ...prev,
+      };
+
+      // First boot: choose what should be open initially
+      if (firstBoot) {
+        this._ui = {
+          ...this._ui,
+          general: true,
+          menu: false,
+          menuButtons: false,
+          embedders: false,
+          advanced: false,
+          openMenuBtn: null,
+          openEmbedder: null,
+        };
+      }
+
+      this.requestUpdate();
+    }
+
+    _get(path, fallback = null) {
+      try {
+        const parts = String(path).split(".");
+        let o = this._config;
+        for (const p of parts) o = o[p];
+        return (o === undefined || o === null) ? fallback : o;
+      } catch (e) {
+        return fallback;
+      }
+    }
+
+    _set(path, value) {
+      const cfg = deepClone(this._config);
+      const parts = String(path).split(".");
+      let o = cfg;
+      while (parts.length > 1) {
+        const p = parts.shift();
+        if (o[p] == null || typeof o[p] !== "object") o[p] = {};
+        o = o[p];
+      }
+      o[parts[0]] = value;
+
+      this._config = cfg;
+      this._fireChanged();
+    }
+
+    _fireChanged() {
+      this.dispatchEvent(new CustomEvent("config-changed", {
+        detail: { config: this._config },
+        bubbles: true,
+        composed: true,
+      }));
+    }
+
+    _ensureMenu() {
+      const cfg = this._config || {};
+      if (!cfg.menu) cfg.menu = {};
+      if (!cfg.menu.position) cfg.menu.position = {};
+      if (!Array.isArray(cfg.menu.buttons)) cfg.menu.buttons = [];
+      this._config = cfg;
+    }
+
+    _ensureEmbedders() {
+      const cfg = this._config || {};
+      if (!Array.isArray(cfg.embedders)) cfg.embedders = [];
+      this._config = cfg;
+    }
+
+    _togglePanel(key, expanded) {
+      this._ui = { ...(this._ui || {}), [key]: !!expanded };
+    }
+
+    _selectedValue(e) {
+      // HA versions differ: sometimes value is in e.detail.value
+      // fallback to target.value
+      return (e && e.detail && e.detail.value != null) ? e.detail.value : (e && e.target ? e.target.value : undefined);
+    }
+
+static get styles() {
+      return css`
+        .wrap {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+          padding: 12px 0 4px 0;
+        }
+        .row {
+          display: flex;
+          gap: 12px;
+          flex-wrap: wrap;
+          align-items: center;
+          min-height: 40px;
+          margin: 8px 0;
+        }
+        .row > * {
+          flex: 1 1 170px;
+          min-width: 170px;
+        }
+        .mini {
+          flex: 1 1 120px;
+          min-width: 120px;
+        }
+
+        /* NEW: lock axis controls into one line (prevents the last "Value" dropping) */
+        .axisgrid {
+          display: grid;
+          grid-template-columns: 1.3fr 0.7fr 1.3fr 0.7fr;
+          gap: 12px;
+          align-items: end;
+          min-height: 40px;
+          margin: 8px 0;
+        }
+        .axisgrid > * {
+          min-width: 0;
+        }
+
+        .btnrow {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          justify-content: space-between;
+          padding: 8px 0;
+        }
+        .btnrow .left {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          min-width: 240px;
+        }
+        .btnrow .title {
+          font-weight: 600;
+        }
+
+        .hdrline {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .hdricon {
+          width: 20px;
+          height: 20px;
+          color: var(--secondary-text-color);
+          flex: 0 0 auto;
+        }
+        .btns {
+          display: flex;
+          gap: 6px;
+          flex: 0 0 auto;
+          align-items: center;
+        }
+
+        .trash {
+          cursor: pointer;
+          padding: 6px;
+          border-radius: 999px;
+          color: var(--secondary-text-color);
+        }
+        .trash:hover {
+          color: var(--primary-text-color);
+          background: rgba(0,0,0,0.06);
+        }
+        .btns mwc-button {
+          margin-left: 8px;
+        }
+
+        /* (cleaned) */
+
+        .muted {
+          display: block;
+          color: var(--secondary-text-color);
+          font-size: 12px;
+        }
+        .sub {
+          padding: 10px 0 4px 0;
+        }
+        ha-textfield, ha-select {
+          width: 100%;
+        }
+      `;
+    }
+
+
+    // -------- UI: GENERAL --------
+    _renderGeneral() {
+      const overlay_log = this._get("overlay_log", false) === true;
+      const portal_mode = this._get("portal_mode", "global") === "local" ? "local" : "global";
+      const multi_mode = this._get("multi_mode", false) === true;
+
+      return html`
+        <ha-expansion-panel
+          .expanded=${!!this._ui.general}
+          @expanded-changed=${(e) => this._togglePanel("general", e.detail.value)}
+        >
+          <div slot="header" class="btnrow" style="padding:0;">
+            <div class="left">
+              <div class="hdrline">
+                <ha-icon class="hdricon" icon="mdi:cog-outline"></ha-icon>
+                <div class="title">General Settings</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <ha-formfield label="Overlay log">
+              <ha-switch
+                .checked=${overlay_log}
+                @change=${(e) => this._set("overlay_log", e.target.checked)}
+              ></ha-switch>
+            </ha-formfield>
+
+            <ha-select
+              label="Portal mode"
+              .value=${portal_mode}
+              @closed=${(ev) => ev.stopPropagation()}
+              @selected=${(e) => { e.stopPropagation(); this._set("portal_mode", this._selectedValue(e)); }}
+            >
+              <mwc-list-item value="global">Global</mwc-list-item>
+              <mwc-list-item value="local">Local</mwc-list-item>
+            </ha-select>
+
+            <ha-formfield label="Multi mode">
+              <ha-switch
+                .checked=${multi_mode}
+                @change=${(e) => this._set("multi_mode", e.target.checked)}
+              ></ha-switch>
+            </ha-formfield>
+          </div>
+        </ha-expansion-panel>
+      `;
+    }
+
+    // -------- UI: MENU --------
+    _renderMenu() {
+      this._ensureMenu();
+
+      const enabled = this._get("menu.enabled", false) === true;
+      const pos = this._get("menu.position", {}) || {};
+      const zIndex = this._get("menu.position.z_index", 1100);
+
+      const vAxis = (pos.bottom != null) ? "bottom" : "top";
+      const hAxis = (pos.right != null) ? "right" : "left";
+
+      const vVal = (vAxis === "bottom") ? (pos.bottom ?? "15%") : (pos.top ?? "15%");
+      const hVal = (hAxis === "right") ? (pos.right ?? "5%") : (pos.left ?? "5%");
+
+      return html`
+        <ha-expansion-panel
+          .expanded=${!!this._ui.menu}
+          @expanded-changed=${(e) => this._togglePanel("menu", e.detail.value)}
+        >
+          <div slot="header" class="btnrow" style="padding:0;">
+            <div class="left">
+              <div class="hdrline">
+                <ha-icon class="hdricon" icon="mdi:menu"></ha-icon>
+                <div class="title">Menu</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <ha-formfield label="Enable menu">
+              <ha-switch
+                .checked=${enabled}
+                @change=${(e) => this._set("menu.enabled", e.target.checked)}
+              ></ha-switch>
+            </ha-formfield>
+          </div>
+
+          <div class="row">
+            <ha-select
+              label="Mode"
+              .value=${this._get("menu.position.mode", "fixed") === "absolute" ? "absolute" : "fixed"}
+              @closed=${(ev) => ev.stopPropagation()}
+              @selected=${(e) => { e.stopPropagation(); this._set("menu.position.mode", this._selectedValue(e)); }}
+            >
+              <mwc-list-item value="fixed">fixed</mwc-list-item>
+              <mwc-list-item value="absolute">absolute</mwc-list-item>
+            </ha-select>
+
+            <ha-textfield
+              label="Z-index"
+              .value=${String(zIndex)}
+              @change=${(e) => {
+                const v = Number(e.target.value);
+                this._set("menu.position.z_index", Number.isFinite(v) ? v : e.target.value);
+              }}
+            ></ha-textfield>
+          </div>
+
+          <div class="axisgrid">
+            <ha-select
+              class="mini"
+              label="Vertical"
+              .value=${vAxis}
+              @closed=${(ev) => ev.stopPropagation()}
+              @selected=${(e) => {
+                e.stopPropagation();
+                const axis = this._selectedValue(e); // top | bottom
+                const current = (axis === "bottom") ? (this._get("menu.position.bottom", "15%")) : (this._get("menu.position.top", "15%"));
+
+                const cfg = deepClone(this._config);
+                if (!cfg.menu) cfg.menu = {};
+                if (!cfg.menu.position) cfg.menu.position = {};
+                const mp = cfg.menu.position;
+
+                if (axis === "top") {
+                  mp.top = current;
+                  delete mp.bottom;
+                } else {
+                  mp.bottom = current;
+                  delete mp.top;
+                }
+
+                this._config = cfg;
+                this._fireChanged();
+              }}
+            >
+              <mwc-list-item value="top">Top</mwc-list-item>
+              <mwc-list-item value="bottom">Bottom</mwc-list-item>
+            </ha-select>
+
+            <ha-textfield
+              class="mini"
+              label="Value"
+              .value=${String(vVal)}
+              @change=${(e) => {
+                const val = e.target.value;
+                if (vAxis === "bottom") this._set("menu.position.bottom", val);
+                else this._set("menu.position.top", val);
+              }}
+            ></ha-textfield>
+
+            <ha-select
+              class="mini"
+              label="Horizontal"
+              .value=${hAxis}
+              @closed=${(ev) => ev.stopPropagation()}
+              @selected=${(e) => {
+                e.stopPropagation();
+                const axis = this._selectedValue(e); // left | right
+                const current = (axis === "right") ? (this._get("menu.position.right", "5%")) : (this._get("menu.position.left", "5%"));
+
+                const cfg = deepClone(this._config);
+                if (!cfg.menu) cfg.menu = {};
+                if (!cfg.menu.position) cfg.menu.position = {};
+                const mp = cfg.menu.position;
+
+                if (axis === "left") {
+                  mp.left = current;
+                  delete mp.right;
+                } else {
+                  mp.right = current;
+                  delete mp.left;
+                }
+
+                this._config = cfg;
+                this._fireChanged();
+              }}
+            >
+              <mwc-list-item value="left">Left</mwc-list-item>
+              <mwc-list-item value="right">Right</mwc-list-item>
+            </ha-select>
+
+            <ha-textfield
+              class="mini"
+              label="Value"
+              .value=${String(hVal)}
+              @change=${(e) => {
+                const val = e.target.value;
+                if (hAxis === "right") this._set("menu.position.right", val);
+                else this._set("menu.position.left", val);
+              }}
+            ></ha-textfield>
+          </div>
+
+          ${(() => {
+            const style = String(this._get("menu.button_style", "") || "");
+
+            const readProp = (prop) => {
+              // matches: "background: black;" or "background:black"
+              const re = new RegExp(`(^|\\n)\\s*${prop}\\s*:\\s*([^;\\n]+)`, "i");
+              const m = style.match(re);
+              return m ? m[2].trim() : "";
+            };
+
+            const writeProp = (prop, value) => {
+              const cfg = deepClone(this._config);
+              if (!cfg.menu) cfg.menu = {};
+
+              const raw = String((cfg.menu.button_style != null) ? cfg.menu.button_style : "");
+              const lines = raw
+                .split("\n")
+                .map((l) => l.replace(/\r/g, ""))
+                .filter((l) => l.trim() !== "");
+
+              const re = new RegExp(`^\\s*${prop}\\s*:`, "i");
+              const out = [];
+
+              for (const l of lines) {
+                if (!re.test(l)) out.push(l);
+              }
+
+              const v = String(value || "").trim();
+              if (v) out.push(`${prop}: ${v};`);
+
+              const next = out.join("\n").trim();
+              if (next) cfg.menu.button_style = next;
+              else delete cfg.menu.button_style;
+
+              this._config = cfg;
+              this._fireChanged();
+            };
+
+            const bg = readProp("background");
+            const tc = readProp("color");
+
+            return html`
+              <div class="row">
+                <ha-textfield
+                  label="Background"
+                  .value=${String(bg)}
+                  @change=${(e) => writeProp("background", e.target.value)}
+                ></ha-textfield>
+
+                <ha-textfield
+                  label="Text color"
+                  .value=${String(tc)}
+                  @change=${(e) => writeProp("color", e.target.value)}
+                ></ha-textfield>
+              </div>
+            `;
+          })()}
+
+          ${this._renderMenuButtons()}
+        </ha-expansion-panel>
+      `;
+    }
+
+    // -------- UI: MENU BUTTONS (under MENU) --------
+    _addMenuButton() {
+      this._ensureMenu();
+      const cfg = deepClone(this._config);
+
+      const nextNum =
+        cfg.menu.buttons.length > 0
+          ? Math.max(...cfg.menu.buttons.map(b => Number(b.target) || 0)) + 1
+          : 1;
+
+      const nextTarget = String(nextNum).padStart(3, "0");
+
+      cfg.menu.buttons.push({
+        label: "New",
+        icon: "mdi:alert",
+        target: nextTarget,
+      });
+      this._config = cfg;
+      this._ui = { ...(this._ui || {}), menuButtons: true, openMenuBtn: cfg.menu.buttons.length - 1 };
+      this._fireChanged();
+    }
+
+
+    _removeMenuButton(i) {
+      this._ensureMenu();
+      const cfg = deepClone(this._config);
+      cfg.menu.buttons.splice(i, 1);
+      this._config = cfg;
+      this._ui = { ...(this._ui || {}), openMenuBtn: null };
+      this._fireChanged();
+    }
+
+    _renderMenuButtons() {
+      this._ensureMenu();
+      const buttons = this._config.menu.buttons;
+
+      return html`
+        <div style="margin-top:12px;"></div>
+        <ha-expansion-panel
+          .expanded=${!!this._ui.menuButtons}
+          @expanded-changed=${(e) => this._togglePanel("menuButtons", e.detail.value)}
+        >
+          <div slot="header" class="btnrow" style="padding:0;">
+            <div class="left">
+              <div class="title">Menu Buttons</div>
+              <div class="muted">Edit inline (accordion)</div>
+            </div>
+            <div class="btns">
+              <mwc-button @click=${(e) => { e.stopPropagation(); this._addMenuButton(); }}>+ Add Button</mwc-button>
+            </div>
+          </div>
+
+          ${buttons.map((b, i) => html`
+            <ha-expansion-panel
+              .expanded=${this._ui.openMenuBtn === i}
+              @expanded-changed=${(e) => {
+                const open = e.detail.value === true;
+                this._ui = { ...(this._ui || {}), openMenuBtn: open ? i : null };
+              }}
+            >
+              <div slot="header" class="btnrow" style="padding:0;">
+                <div class="left">
+                  <div class="title">${b.label || "Button"} • ${b.icon || ""} → ${b.target || ""}</div>
+                </div>
+                <div class="btns">
+                  <ha-icon
+                    class="trash"
+                    icon="mdi:delete"
+                    title="Delete"
+                    @click=${(e) => { e.stopPropagation(); this._removeMenuButton(i); }}
+                  ></ha-icon>
+                </div>
+              </div>
+
+              <div class="row sub">
+                <ha-textfield
+                  label="Label"
+                  .value=${b.label || ""}
+                  @change=${(e) => {
+                    const cfg = deepClone(this._config);
+                    cfg.menu.buttons[i].label = e.target.value;
+                    this._config = cfg;
+                    this._fireChanged();
+                  }}
+                ></ha-textfield>
+              </div>
+
+              <div class="row sub">
+                ${customElements.get("ha-icon-picker") ? html`
+                  <ha-icon-picker
+                    .label=${"Icon"}
+                    .value=${b.icon || ""}
+                    @value-changed=${(e) => {
+                      const cfg = deepClone(this._config);
+                      cfg.menu.buttons[i].icon = e.detail.value;
+                      this._config = cfg;
+                      this._fireChanged();
+                    }}
+                  ></ha-icon-picker>
+                ` : html`
+                  <ha-textfield
+                    label="Icon"
+                    .value=${b.icon || ""}
+                    @change=${(e) => {
+                      const cfg = deepClone(this._config);
+                      cfg.menu.buttons[i].icon = e.target.value;
+                      this._config = cfg;
+                      this._fireChanged();
+                    }}
+                  ></ha-textfield>
+                `}
+
+                <ha-textfield
+                  label="Target"
+                  .value=${b.target || ""}
+                  @change=${(e) => {
+                    const cfg = deepClone(this._config);
+                    cfg.menu.buttons[i].target = e.target.value;
+                    this._config = cfg;
+                    this._fireChanged();
+                  }}
+                ></ha-textfield>
+              </div>
+            </ha-expansion-panel>
+          `)}
+        </ha-expansion-panel>
+      `;
+    }
+
+    // -------- UI: EMBEDDERS --------
+    _addEmbedder() {
+      this._ensureEmbedders();
+      const cfg = deepClone(this._config);
+
+      const nextNum =
+        cfg.embedders.length > 0
+          ? Math.max(...cfg.embedders.map(e => Number(e.embed_id) || 0)) + 1
+          : 1;
+
+      const nextId = String(nextNum).padStart(3, "0");
+
+      cfg.embedders.push({
+        embed_id: nextId,
+        dashboard: "dashboard-test",
+        embedder_title: "New Embedder",
+        show_close: true,
+        show_title: true,
+        default_visible: false,
+        enable_scroll: true,
+        content: {
+          position: {
+            mode: "fixed",
+            top: "15%",
+            right: "5%",
+            width: "300px",
+            height: "350px",
+            z_index: 1000,
+          },
+        },
+      });
+      this._config = cfg;
+      this._ui = { ...(this._ui || {}), embedders: true, openEmbedder: cfg.embedders.length - 1 };
+      this._fireChanged();
+    }
+
+
+    _removeEmbedder(i) {
+      this._ensureEmbedders();
+      const cfg = deepClone(this._config);
+      cfg.embedders.splice(i, 1);
+      this._config = cfg;
+      this._ui = { ...(this._ui || {}), openEmbedder: null };
+      this._fireChanged();
+    }
+
+    _renderEmbedders() {
+      this._ensureEmbedders();
+      const embedders = this._config.embedders;
+
+      return html`
+        <ha-expansion-panel
+          .expanded=${!!this._ui.embedders}
+          @expanded-changed=${(e) => this._togglePanel("embedders", e.detail.value)}
+        >
+          <div slot="header" class="btnrow" style="padding:0;">
+            <div class="left">
+              <div class="hdrline">
+                <ha-icon class="hdricon" icon="mdi:layers-outline"></ha-icon>
+                <div class="title">Embedders</div>
+              </div>
+              <div class="muted">Edit inline (accordion)</div>
+            </div>
+            <div class="btns">
+              <mwc-button @click=${(e) => { e.stopPropagation(); this._addEmbedder(); }}>+ Add Embedder</mwc-button>
+            </div>
+          </div>
+
+          ${embedders.map((em, i) => html`
+            <ha-expansion-panel
+              .expanded=${this._ui.openEmbedder === i}
+              @expanded-changed=${(e) => {
+                const open = e.detail.value === true;
+                this._ui = { ...(this._ui || {}), openEmbedder: open ? i : null };
+              }}
+            >
+              <div slot="header" class="btnrow" style="padding:0;">
+                <div class="left">
+                  <div class="title">${em.embedder_title || "Embedder"} (${em.embed_id || ""}) • ${em.dashboard || ""}</div>
+                </div>
+                <div class="btns">
+                  <ha-icon
+                    class="trash"
+                    icon="mdi:delete"
+                    title="Delete"
+                    @click=${(e) => { e.stopPropagation(); this._removeEmbedder(i); }}
+                  ></ha-icon>
+                </div>
+              </div>
+
+              <div class="row sub">
+                <ha-formfield label="Show Title">
+                  <ha-switch
+                    .checked=${em.show_title !== false}
+                    @change=${(e) => {
+                      const cfg = deepClone(this._config);
+                      cfg.embedders[i].show_title = e.target.checked;
+                      this._config = cfg;
+                      this._fireChanged();
+                    }}
+                  ></ha-switch>
+                </ha-formfield>
+
+                <ha-formfield label="Show Close">
+                  <ha-switch
+                    .checked=${em.show_close === true}
+                    @change=${(e) => {
+                      const cfg = deepClone(this._config);
+                      cfg.embedders[i].show_close = e.target.checked;
+                      this._config = cfg;
+                      this._fireChanged();
+                    }}
+                  ></ha-switch>
+                </ha-formfield>
+
+                <ha-formfield label="Default Visible">
+                  <ha-switch
+                    .checked=${em.default_visible === true}
+                    @change=${(e) => {
+                      const cfg = deepClone(this._config);
+                      cfg.embedders[i].default_visible = e.target.checked;
+                      this._config = cfg;
+                      this._fireChanged();
+                    }}
+                  ></ha-switch>
+                </ha-formfield>
+
+                <ha-formfield label="Enable Scroll">
+                  <ha-switch
+                    .checked=${em.enable_scroll !== false}
+                    @change=${(e) => {
+                      const cfg = deepClone(this._config);
+                      cfg.embedders[i].enable_scroll = e.target.checked;
+                      this._config = cfg;
+                      this._fireChanged();
+                    }}
+                  ></ha-switch>
+                </ha-formfield>
+              </div>
+
+              <div class="row">
+                <ha-textfield
+                  label="Title"
+                  .value=${em.embedder_title || ""}
+                  @change=${(e) => {
+                    const cfg = deepClone(this._config);
+                    cfg.embedders[i].embedder_title = e.target.value;
+                    this._config = cfg;
+                    this._fireChanged();
+                  }}
+                ></ha-textfield>
+
+                <ha-textfield
+                  label="Embed ID (001-999)"
+                  .value=${em.embed_id || ""}
+                  @change=${(e) => {
+                    const cfg = deepClone(this._config);
+                    cfg.embedders[i].embed_id = e.target.value;
+                    this._config = cfg;
+                    this._fireChanged();
+                  }}
+                ></ha-textfield>
+              </div>
+
+              <div class="row">
+                <ha-textfield
+                  label="Dashboard"
+                  .value=${em.dashboard || ""}
+                  @change=${(e) => {
+                    const cfg = deepClone(this._config);
+                    cfg.embedders[i].dashboard = e.target.value;
+                    this._config = cfg;
+                    this._fireChanged();
+                  }}
+                ></ha-textfield>
+              </div>
+
+              <div style="font-weight:600; margin: 10px 0 4px 0;">
+                Position
+              </div>
+
+              ${(() => {
+                const p = (((em || {}).content || {}).position) || {};
+                const mode = (p.mode === "absolute") ? "absolute" : "fixed";
+                const z = (p.z_index != null) ? p.z_index : 1000;
+
+                const vAxis = (p.bottom != null) ? "bottom" : "top";
+                const hAxis = (p.right != null) ? "right" : "left";
+
+                const vVal = (vAxis === "bottom") ? (p.bottom ?? "15%") : (p.top ?? "15%");
+                const hVal = (hAxis === "right") ? (p.right ?? "5%") : (p.left ?? "5%");
+
+                const w = (p.width != null) ? p.width : "300px";
+                const h = (p.height != null) ? p.height : "350px";
+
+                return html`
+                  <div class="row">
+                    <ha-select
+                      label="Mode"
+                      .value=${mode}
+                      @closed=${(ev) => ev.stopPropagation()}
+                      @selected=${(e) => {
+                        e.stopPropagation();
+                        const cfg = deepClone(this._config);
+                        if (!cfg.embedders[i].content) cfg.embedders[i].content = {};
+                        if (!cfg.embedders[i].content.position) cfg.embedders[i].content.position = {};
+                        cfg.embedders[i].content.position.mode = this._selectedValue(e);
+                        this._config = cfg;
+                        this._fireChanged();
+                      }}
+                    >
+                      <mwc-list-item value="fixed">fixed</mwc-list-item>
+                      <mwc-list-item value="absolute">absolute</mwc-list-item>
+                    </ha-select>
+
+                    <ha-textfield
+                      label="z_index"
+                      .value=${String(z)}
+                      @change=${(e) => {
+                        const cfg = deepClone(this._config);
+                        if (!cfg.embedders[i].content) cfg.embedders[i].content = {};
+                        if (!cfg.embedders[i].content.position) cfg.embedders[i].content.position = {};
+                        cfg.embedders[i].content.position.z_index = Number(e.target.value);
+                        this._config = cfg;
+                        this._fireChanged();
+                      }}
+                    ></ha-textfield>
+                  </div>
+
+                  <div class="axisgrid">
+                    <ha-select
+                      label="Vertical"
+                      .value=${vAxis}
+                      @closed=${(ev) => ev.stopPropagation()}
+                      @selected=${(e) => {
+                        e.stopPropagation();
+                        const axis = this._selectedValue(e);
+                        const cfg = deepClone(this._config);
+                        if (!cfg.embedders[i].content) cfg.embedders[i].content = {};
+                        if (!cfg.embedders[i].content.position) cfg.embedders[i].content.position = {};
+                        delete cfg.embedders[i].content.position.top;
+                        delete cfg.embedders[i].content.position.bottom;
+                        if (axis === "bottom") cfg.embedders[i].content.position.bottom = vVal;
+                        else cfg.embedders[i].content.position.top = vVal;
+                        this._config = cfg;
+                        this._fireChanged();
+                      }}
+                    >
+                      <mwc-list-item value="top">top</mwc-list-item>
+                      <mwc-list-item value="bottom">bottom</mwc-list-item>
+                    </ha-select>
+
+                    <ha-textfield
+                      class="mini"
+                      label="Value"
+                      .value=${String(vVal)}
+                      @change=${(e) => {
+                        const cfg = deepClone(this._config);
+                        if (!cfg.embedders[i].content) cfg.embedders[i].content = {};
+                        if (!cfg.embedders[i].content.position) cfg.embedders[i].content.position = {};
+                        if (vAxis === "bottom") cfg.embedders[i].content.position.bottom = e.target.value;
+                        else cfg.embedders[i].content.position.top = e.target.value;
+                        this._config = cfg;
+                        this._fireChanged();
+                      }}
+                    ></ha-textfield>
+
+                    <ha-select
+                      label="Horizontal"
+                      .value=${hAxis}
+                      @closed=${(ev) => ev.stopPropagation()}
+                      @selected=${(e) => {
+                        e.stopPropagation();
+                        const axis = this._selectedValue(e);
+                        const cfg = deepClone(this._config);
+                        if (!cfg.embedders[i].content) cfg.embedders[i].content = {};
+                        if (!cfg.embedders[i].content.position) cfg.embedders[i].content.position = {};
+                        delete cfg.embedders[i].content.position.left;
+                        delete cfg.embedders[i].content.position.right;
+                        if (axis === "right") cfg.embedders[i].content.position.right = hVal;
+                        else cfg.embedders[i].content.position.left = hVal;
+                        this._config = cfg;
+                        this._fireChanged();
+                      }}
+                    >
+                      <mwc-list-item value="left">left</mwc-list-item>
+                      <mwc-list-item value="right">right</mwc-list-item>
+                    </ha-select>
+
+                    <ha-textfield
+                      class="mini"
+                      label="Value"
+                      .value=${String(hVal)}
+                      @change=${(e) => {
+                        const cfg = deepClone(this._config);
+                        if (!cfg.embedders[i].content) cfg.embedders[i].content = {};
+                        if (!cfg.embedders[i].content.position) cfg.embedders[i].content.position = {};
+                        if (hAxis === "right") cfg.embedders[i].content.position.right = e.target.value;
+                        else cfg.embedders[i].content.position.left = e.target.value;
+                        this._config = cfg;
+                        this._fireChanged();
+                      }}
+                    ></ha-textfield>
+                  </div>
+
+                  <div class="row">
+                    <ha-textfield
+                      label="Width"
+                      .value=${String(w)}
+                      @change=${(e) => {
+                        const cfg = deepClone(this._config);
+                        if (!cfg.embedders[i].content) cfg.embedders[i].content = {};
+                        if (!cfg.embedders[i].content.position) cfg.embedders[i].content.position = {};
+                        cfg.embedders[i].content.position.width = e.target.value;
+                        this._config = cfg;
+                        this._fireChanged();
+                      }}
+                    ></ha-textfield>
+
+                    <ha-textfield
+                      label="Height"
+                      .value=${String(h)}
+                      @change=${(e) => {
+                        const cfg = deepClone(this._config);
+                        if (!cfg.embedders[i].content) cfg.embedders[i].content = {};
+                        if (!cfg.embedders[i].content.position) cfg.embedders[i].content.position = {};
+                        cfg.embedders[i].content.position.height = e.target.value;
+                        this._config = cfg;
+                        this._fireChanged();
+                      }}
+                    ></ha-textfield>
+                  </div>
+                `;
+              })()}
+
+            </ha-expansion-panel>
+          `)}
+        </ha-expansion-panel>
+      `;
+    }
+
+    // -------- UI: ADVANCED --------
+    _renderAdvanced() {
+      const raw = JSON.stringify(this._config || {}, null, 2);
+
+      return html`
+        <ha-expansion-panel
+          .expanded=${!!this._ui.advanced}
+          @expanded-changed=${(e) => this._togglePanel("advanced", e.detail.value)}
+        >
+          <div slot="header" class="btnrow" style="padding:0;">
+            <div class="left">
+              <div class="hdrline">
+                <ha-icon class="hdricon" icon="mdi:code-json"></ha-icon>
+                <div class="title">Advanced (Raw)</div>
+              </div>
+            </div>
+          </div>
+          <div class="muted">JSON only (optional). Invalid JSON is ignored.</div>
+          <div class="sub">
+            <ha-textfield
+              label="Raw JSON"
+              .value=${raw}
+              multiline
+              rows="10"
+              @change=${(e) => {
+                try {
+                  const next = JSON.parse(e.target.value);
+                  this._config = deepClone(next);
+                  this._fireChanged();
+                } catch (err) {}
+              }}
+            ></ha-textfield>
+          </div>
+        </ha-expansion-panel>
+      `;
+    }
+
+    render() {
+      if (!this.hass || !this._config) return html``;
+
+      return html`
+        <ha-card>
+          <div class="card-content">
+            <div class="wrap">
+              ${this._renderGeneral()}
+              ${this._renderMenu()}
+              ${this._renderEmbedders()}
+              ${this._renderAdvanced()}
+            </div>
+          </div>
+        </ha-card>
+      `;
+    }
+  }
+
+  if (!customElements.get("overlaypro-card-editor")) {
+    customElements.define("overlaypro-card-editor", OverlayProCardEditor);
+  }
+
+  // Home Assistant editor hook (engine untouched)
+  overlayprocard.getConfigElement = function () {
+    return document.createElement("overlaypro-card-editor");
+  };
+})();
+
   // ============================================================================
   // Helper Functions (Optional - for future enhancements)
   // ============================================================================
