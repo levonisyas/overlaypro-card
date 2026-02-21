@@ -2,7 +2,7 @@
 // Overlay Pro Card for Home Assistant
 // ============================================================================
 
-class overlayprocard extends HTMLElement {
+class OverlayProCard extends HTMLElement {
 
     // --------------------------------------------------------------------------
     // Lovelace UI: Default YAML (Stub Config)
@@ -2021,7 +2021,7 @@ console.info(
   // Custom Element Registration - SIMPLE & COMPATIBLE
   // ============================================================================
   if (!customElements.get('overlaypro-card')) {
-    customElements.define('overlaypro-card', overlayprocard);
+    customElements.define('overlaypro-card', OverlayProCard);
     
     // Lovelace editor integration
     window.customCards = window.customCards || [];
@@ -3048,7 +3048,7 @@ static get styles() {
   }
 
   // Home Assistant editor hook (engine untouched)
-  overlayprocard.getConfigElement = function () {
+  OverlayProCard.getConfigElement = function () {
     return document.createElement("overlaypro-card-editor");
   };
 })();
